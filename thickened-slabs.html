@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thickened Slab Foundation Design | RC Design Suite</title>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Fira+Code:wght@400&display=swap" rel="stylesheet">
+    <!-- MathJax -->
+    <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }
+    };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/polyfill/3.111.0/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        :root {
+            --primary: #0f172a;
+            --accent: #2563eb;
+            --bg: #f8fafc;
+            --panel-bg: #ffffff;
+            --border: #e2e8f0;
+            --text-main: #1e293b;
+            --text-sub: #64748b;
+            --danger: #ef4444;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background-color: var(--primary);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+
+        .nav-left { display: flex; align-items: center; gap: 1rem; }
+        .back-btn {
+            background-color: rgba(255,255,255,0.1);
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .back-btn:hover { background-color: rgba(255,255,255,0.2); }
+        .nav-title { font-weight: 700; font-size: 1.1rem; }
+
+        .container {
+            display: grid;
+            grid-template-columns: 360px 1fr;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            max-width: 1500px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* --- LEFT PANEL --- */
+        .input-panel {
+            background: var(--panel-bg);
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+
+        .panel-header {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--primary);
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 0.4rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .input-group {
+            display: grid;
+            grid-template-columns: 1fr 80px;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 0.5rem;
+        }
+
+        .input-group label {
+            font-size: 0.8rem;
+            color: var(--text-sub);
+            font-weight: 600;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 0.4rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            text-align: right;
+        }
+
+        /* Column Manager */
+        .col-manager {
+            background: #f1f5f9;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .col-list {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            max-height: 120px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        .col-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 10px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.75rem;
+        }
+        .btn-add {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* --- RIGHT PANEL --- */
+        .results-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .viz-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .card-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-sub);
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        canvas {
+            width: 100%;
+            height: 300px;
+            background: #fafafa;
+            border: 1px solid #eee;
+            border-radius: 8px;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .calc-step {
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+        .status-success { background: #dcfce7; color: #166534; }
+        .status-danger { background: #fee2e2; color: #991b1b; }
+        .status-warning { background: #fef3c7; color: #92400e; }
+
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        .result-table td {
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .result-table td:last-child {
+            text-align: right;
+            font-weight: 700;
+            font-family: 'Fira Code', monospace;
+        }
+
+        /* Buttons and Inputs Styling (RC Premium) */
+        input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+        .btn-add:hover { background: #1d4ed8; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="index.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Suite</a>
+            <span class="nav-title"><i class="fa-solid fa-layer-group"></i> Thickened Slab Foundation</span>
+        </div>
+        <div style="font-size: 0.8rem; opacity: 0.8;">Westergaard Analysis Engine v1.0</div>
+    </nav>
+
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="input-panel">
+            <div>
+                <div class="panel-header">Slab Geometry</div>
+                <div class="input-group">
+                    <label>Overall Length $L$ ($m$)</label>
+                    <input type="number" id="L_m" value="10" step="0.5">
+                </div>
+                <div class="input-group">
+                    <label>Overall Width $W$ ($m$)</label>
+                    <input type="number" id="W_m" value="8" step="0.5">
+                </div>
+                <div class="input-group">
+                    <label>Slab Thickness $h_s$ ($mm$)</label>
+                    <input type="number" id="hs_mm" value="125" step="5">
+                </div>
+            </div>
+
+            <div>
+                <div class="panel-header">Thickened Edge</div>
+                <div class="input-group">
+                    <label>Edge Depth $h_e$ ($mm$)</label>
+                    <input type="number" id="he_mm" value="450" step="50">
+                </div>
+                <div class="input-group">
+                    <label>Edge Width $b_e$ ($mm$)</label>
+                    <input type="number" id="be_mm" value="300" step="50">
+                </div>
+            </div>
+
+            <div>
+                <div class="panel-header">Subgrade & Materials</div>
+                <div class="input-group">
+                    <label>Reaction $k$ ($kN/m^3$)</label>
+                    <input type="number" id="k_sub" value="30000" step="5000">
+                </div>
+                <div class="input-group">
+                    <label>Concrete $f'_c$ ($MPa$)</label>
+                    <input type="number" id="fc" value="25" step="1">
+                </div>
+                <div class="input-group">
+                    <label>Steel $f_y$ ($MPa$)</label>
+                    <input type="number" id="fy" value="420" step="10">
+                </div>
+                <div class="input-group">
+                    <label>Bar Size ($mm$)</label>
+                    <select id="db_mm">
+                        <option value="10">10 mm</option>
+                        <option value="12" selected>12 mm</option>
+                        <option value="16">16 mm</option>
+                        <option value="20">20 mm</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <div class="panel-header">Column Points</div>
+                <div class="col-manager">
+                    <div id="columnList" class="col-list"></div>
+                    <div class="input-group">
+                        <label>Coord $X$ ($m$)</label>
+                        <input type="number" id="colX" value="5" step="0.1">
+                    </div>
+                    <div class="input-group">
+                        <label>Coord $Y$ ($m$)</label>
+                        <input type="number" id="colY" value="4" step="0.1">
+                    </div>
+                    <div class="input-group">
+                        <label>Service Load $P$ ($kN$)</label>
+                        <input type="number" id="colP" value="150" step="10">
+                    </div>
+                    <button class="btn-add" onclick="addColumn()">Add Column</button>
+                </div>
+            </div>
+            
+            <button class="btn-add" style="background: var(--primary); margin-top: 10px;" onclick="calculate()">Design Foundation</button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="results-panel">
+            <div class="viz-row">
+                <div class="card">
+                    <div class="card-title">Plan View <span style="font-size: 0.7rem; color: var(--text-sub);">Blue: Pos / Red: Neg</span></div>
+                    <canvas id="planCanvas"></canvas>
+                </div>
+                <div class="card">
+                    <div class="card-title">Elevation Segment</div>
+                    <canvas id="eleCanvas"></canvas>
+                </div>
+            </div>
+
+            <div class="results-grid">
+                <div class="card">
+                    <div class="panel-header" style="border-bottom-color: var(--text-sub);">Flexural Analysis</div>
+                    <div id="flexResults"></div>
+                </div>
+                <div class="card">
+                    <div class="panel-header" style="border-bottom-color: var(--text-sub);">Reinforcement Status</div>
+                    <div id="reinfResults"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let columns = [{x: 5, y: 4, p: 150}];
+        const planCanvas = document.getElementById('planCanvas');
+        const eleCanvas = document.getElementById('eleCanvas');
+        const ctxPlan = planCanvas.getContext('2d');
+        const ctxEle = eleCanvas.getContext('2d');
+
+        function addColumn() {
+            const x = parseFloat(document.getElementById('colX').value);
+            const y = parseFloat(document.getElementById('colY').value);
+            const p = parseFloat(document.getElementById('colP').value);
+            if (isNaN(x) || isNaN(y) || isNaN(p)) return;
+            columns.push({x, y, p});
+            renderColumnList();
+            calculate();
+        }
+
+        function removeColumn(index) {
+            columns.splice(index, 1);
+            renderColumnList();
+            calculate();
+        }
+
+        function renderColumnList() {
+            const list = document.getElementById('columnList');
+            list.innerHTML = columns.map((c, i) => `
+                <div class="col-item">
+                    <span>Col ${i+1}: (${c.x}, ${c.y}) - ${c.p}kN</span>
+                    <button style="color:red; border:none; background:none; cursor:pointer;" onclick="removeColumn(${i})">×</button>
+                </div>
+            `).join('');
+        }
+
+        function calculate() {
+            // 1. Inputs
+            const L = parseFloat(document.getElementById('L_m').value);
+            const W = parseFloat(document.getElementById('W_m').value);
+            const hs = parseFloat(document.getElementById('hs_mm').value);
+            const he = parseFloat(document.getElementById('he_mm').value);
+            const be = parseFloat(document.getElementById('be_mm').value);
+            const k = parseFloat(document.getElementById('k_sub').value); // kN/m3
+            const fc = parseFloat(document.getElementById('fc').value);
+            const fy = parseFloat(document.getElementById('fy').value);
+            const db = parseFloat(document.getElementById('db_mm').value);
+
+            // 2. Constants
+            const E = 4700 * Math.sqrt(fc); // MPa
+            const Poisson = 0.15;
+            
+            // Radius of Relative Stiffness (l) in mm
+            const k_Nmm3 = k * 1e-6; 
+            const l = Math.pow((E * Math.pow(hs, 3)) / (12 * (1 - Poisson**2) * k_Nmm3), 0.25);
+
+            // 3. Analysis (Westergaard / PCA approx)
+            let maxMpos = 0;
+            let maxMneg = 0;
+
+            columns.forEach(col => {
+                const P_N = col.p * 1000 * 1.5; // Factored load
+                
+                // Radius of loading area 'a' (assume 150mm for typical column/base)
+                const a = 150; 
+                // Westergaard Interior Positive Moment (Nmm/mm width)
+                const Mpos = (P_N * (1 + Poisson) / 4) * (Math.log(l / a) + 0.6159);
+                
+                // Approx Negative Moment (peak approx 0.03 to 0.05 * P)
+                const Mneg = 0.05 * P_N; 
+
+                if (Mpos > maxMpos) maxMpos = Mpos;
+                if (Mneg > maxMneg) maxMneg = Mneg;
+            });
+
+            // Cracking Moment (Nmm/mm)
+            const fr = 0.62 * Math.sqrt(fc); // MPa
+            const S = (1000 * Math.pow(hs, 2)) / 6; // Section Modulus per 1000mm width -> mm3
+            const Mcr = (fr * S) / 1000; // Nmm per mm width
+
+            const topBarNeeded = Math.abs(maxMneg) > Mcr;
+
+            // 4. Render Results
+            renderFlexResults(l, maxMpos, maxMneg, Mcr);
+            renderReinfResults(topBarNeeded, hs, maxMpos, fy, db);
+            drawPlan(L, W, l, columns);
+            drawElevation(hs, he, be, topBarNeeded);
+        }
+
+        function renderFlexResults(l, Mpos, Mneg, Mcr) {
+            const div = document.getElementById('flexResults');
+            div.innerHTML = `
+                <div class="calc-step">
+                    <b>Radius of Stiffness ($l$):</b> ${l.toFixed(1)} mm
+                    <p style="font-size:0.75rem; color:var(--text-sub);">Measure of slab rigidity relative to subgrade.</p>
+                </div>
+                <div class="calc-step">
+                    <b>Max Pos Moment ($M_u^+$):</b> ${(Mpos/1000).toFixed(2)} kNm/m
+                </div>
+                <div class="calc-step">
+                    <b>Max Neg Moment ($|M_u^-|$):</b> ${(Mneg/1000).toFixed(2)} kNm/m
+                </div>
+                <div class="calc-step">
+                    <b>Cracking Moment ($M_{cr}$):</b> ${(Mcr/1000).toFixed(2)} kNm/m
+                </div>
+            `;
+            if (window.MathJax) MathJax.typesetPromise();
+        }
+
+        function renderReinfResults(topNeeded, hs, Mpos, fy, db) {
+            const div = document.getElementById('reinfResults');
+            const status = topNeeded ? 
+                `<span class="status-badge status-danger">Top Steel Required</span>` : 
+                `<span class="status-badge status-success">Bottom Only OK</span>`;
+            
+            const area_bar = (Math.PI * Math.pow(db, 2)) / 4;
+            const d = hs - 40; 
+            const As_flex = (Mpos * 1.0) / (0.9 * fy * 0.9 * d); // Simplified As approx
+            const As_min = 0.0018 * 1000 * hs;
+            const As_design = Math.max(As_flex, As_min);
+
+            // Calculate Spacing
+            let spacing = (area_bar * 1000) / As_design;
+            spacing = Math.floor(Math.min(450, Math.max(75, spacing)) / 10) * 10;
+
+            div.innerHTML = `
+                <div style="margin-bottom: 1rem;">${status}</div>
+                <table class="result-table">
+                    <tr><td>Bar Size</td><td>${db} mm</td></tr>
+                    <tr><td>Calculated Spacing</td><td><strong>@ ${spacing} mm c/c</strong></td></tr>
+                    <tr><td>Top Mesh Needed?</td><td>${topNeeded ? '<span style="color:var(--danger)">YES</span>' : 'NO'}</td></tr>
+                    <tr><td>Min. Area ($A_s$)</td><td>${(As_min).toFixed(0)} mm²/m</td></tr>
+                    <tr><td>Flexure Area ($A_s$)</td><td>${(As_flex).toFixed(0)} mm²/m</td></tr>
+                </table>
+                <p style="font-size: 0.75rem; color: var(--text-sub); margin-top: 12px; line-height:1.4;">
+                    Recommendation: Provide a single bottom layer of reinforcing (mesh or bars) for standard loads. 
+                    Add a top layer near concentrated loads if $|M_u^-| > M_{cr}$.
+                </p>
+            `;
+        }
+
+        function drawDimensionLine(ctx, x1, y1, x2, y2, text, offset = 30) {
+            const isHorizontal = Math.abs(y1 - y2) < 2;
+            const dash = [5, 5];
+            ctx.save();
+            ctx.strokeStyle = '#94a3b8';
+            ctx.fillStyle = '#64748b';
+            ctx.lineWidth = 1;
+            ctx.font = '11px Inter';
+            ctx.textAlign = 'center';
+
+            // Extension lines
+            ctx.setLineDash(dash);
+            ctx.beginPath();
+            if (isHorizontal) {
+                ctx.moveTo(x1, y1); ctx.lineTo(x1, y1 + offset);
+                ctx.moveTo(x2, y1); ctx.lineTo(x2, y1 + offset);
+            } else {
+                ctx.moveTo(x1, y1); ctx.lineTo(x1 + offset, y1);
+                ctx.moveTo(x1, y2); ctx.lineTo(x1 + offset, y2);
+            }
+            ctx.stroke();
+
+            // Dimension line
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            const dimY = isHorizontal ? y1 + offset * 0.8 : 0;
+            const dimX = isHorizontal ? 0 : x1 + offset * 0.8;
+            
+            if (isHorizontal) {
+                ctx.moveTo(x1, dimY); ctx.lineTo(x2, dimY);
+                // Arrow heads
+                ctx.moveTo(x1, dimY); ctx.lineTo(x1 + 5, dimY - 3);
+                ctx.moveTo(x1, dimY); ctx.lineTo(x1 + 5, dimY + 3);
+                ctx.moveTo(x2, dimY); ctx.lineTo(x2 - 5, dimY - 3);
+                ctx.moveTo(x2, dimY); ctx.lineTo(x2 - 5, dimY + 3);
+            } else {
+                ctx.moveTo(dimX, y1); ctx.lineTo(dimX, y2);
+                // Arrow heads
+                ctx.moveTo(dimX, y1); ctx.lineTo(dimX - 3, y1 + 5);
+                ctx.moveTo(dimX, y1); ctx.lineTo(dimX + 3, y1 + 5);
+                ctx.moveTo(dimX, y2); ctx.lineTo(dimX - 3, y2 - 5);
+                ctx.moveTo(dimX, y2); ctx.lineTo(dimX + 3, y2 - 5);
+            }
+            ctx.stroke();
+
+            // Text
+            if (isHorizontal) {
+                ctx.fillText(text, (x1 + x2) / 2, dimY - 5);
+            } else {
+                ctx.save();
+                ctx.translate(dimX - 5, (y1 + y2) / 2);
+                ctx.rotate(-Math.PI / 2);
+                ctx.fillText(text, 0, 0);
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+
+        function drawPlan(L, W, l, cols) {
+            planCanvas.width = planCanvas.offsetWidth;
+            planCanvas.height = planCanvas.offsetHeight;
+            const cw = planCanvas.width;
+            const ch = planCanvas.height;
+            ctxPlan.clearRect(0,0,cw,ch);
+
+            const padding = 60;
+            const scale = Math.min((cw - padding * 2)/L, (ch - padding * 2)/W);
+            const dx = (cw - L*scale)/2;
+            const dy = (ch - W*scale)/2;
+
+            // Slab
+            ctxPlan.fillStyle = '#f8fafc';
+            ctxPlan.fillRect(dx, dy, L*scale, W*scale);
+            ctxPlan.strokeStyle = '#cbd5e1';
+            ctxPlan.lineWidth = 1;
+            ctxPlan.strokeRect(dx, dy, L*scale, W*scale);
+
+            // Columns and influence areas
+            cols.forEach(c => {
+                const px = dx + c.x * scale;
+                const py = dy + c.y * scale;
+
+                // Influence radius (l)
+                ctxPlan.beginPath();
+                ctxPlan.arc(px, py, l*scale/1000, 0, Math.PI*2);
+                ctxPlan.fillStyle = 'rgba(37, 99, 235, 0.05)';
+                ctxPlan.fill();
+                ctxPlan.strokeStyle = 'rgba(37, 99, 235, 0.2)';
+                ctxPlan.stroke();
+
+                // Column dot
+                ctxPlan.beginPath();
+                ctxPlan.arc(px, py, 6, 0, Math.PI*2);
+                ctxPlan.fillStyle = '#0f172a';
+                ctxPlan.fill();
+            });
+
+            // Dimensions
+            drawDimensionLine(ctxPlan, dx, dy, dx + L*scale, dy, `${L}m`, -30);
+            drawDimensionLine(ctxPlan, dx, dy, dx, dy + W*scale, `${W}m`, -30);
+        }
+
+        function drawElevation(hs, he, be, topNeeded) {
+            eleCanvas.width = eleCanvas.offsetWidth;
+            eleCanvas.height = eleCanvas.offsetHeight;
+            const cw = eleCanvas.width;
+            const ch = eleCanvas.height;
+            ctxEle.clearRect(0,0,cw,ch);
+
+            // Dynamic Scaling based on max(he, be)
+            const margin = 50;
+            const totalWidth_mm = be * 3; // Show some slab alongside thickening
+            const totalHeight_mm = he * 1.5;
+            
+            const scale = Math.min((cw - margin * 2) / totalWidth_mm, (ch - margin * 2) / totalHeight_mm);
+            
+            const middle = ch / 2 - (he * scale) / 4;
+            const startX = (cw - totalWidth_mm * scale) / 2;
+
+            ctxEle.fillStyle = '#f1f5f9';
+            ctxEle.strokeStyle = '#475569';
+            ctxEle.lineWidth = 2;
+
+            const slabH = hs * scale;
+            const edgeH = he * scale;
+            const edgeB = be * scale;
+            
+            // X-Coordinates
+            const x0 = startX;
+            const x1 = x0 + edgeB;
+            const x2 = x1 + edgeB; // Splay/transition width (assume equal to be for visual)
+            const x3 = x0 + totalWidth_mm * scale;
+
+            ctxEle.beginPath();
+            ctxEle.moveTo(x0, middle - slabH/2); // Top left
+            ctxEle.lineTo(x3, middle - slabH/2); // Top right
+            ctxEle.lineTo(x3, middle + slabH/2); // Bot right (slab)
+            ctxEle.lineTo(x2, middle + slabH/2); // Transition point
+            ctxEle.lineTo(x1, middle + edgeH - slabH/2); // Base of thickening
+            ctxEle.lineTo(x0, middle + edgeH - slabH/2); // Deep end
+            ctxEle.closePath();
+            ctxEle.fill();
+            ctxEle.stroke();
+
+            // Reinforcement
+            ctxEle.lineWidth = 3;
+            // Bottom
+            ctxEle.strokeStyle = '#2563eb';
+            ctxEle.beginPath();
+            ctxEle.moveTo(x0 + 10, middle + slabH/2 - 8);
+            ctxEle.lineTo(x3 - 10, middle + slabH/2 - 8);
+            ctxEle.stroke();
+
+            if (topNeeded) {
+                ctxEle.strokeStyle = '#ef4444';
+                ctxEle.beginPath();
+                ctxEle.moveTo(x0 + 10, middle - slabH/2 + 8);
+                ctxEle.lineTo(x3 - 10, middle - slabH/2 + 8);
+                ctxEle.stroke();
+            }
+
+            // Dimensions
+            drawDimensionLine(ctxEle, x3 + 10, middle - slabH/2, x3 + 10, middle + slabH/2, `${hs}mm`, 10);
+            drawDimensionLine(ctxEle, x0 - 10, middle - slabH/2, x0 - 10, middle + edgeH - slabH/2, `${he}mm`, -10);
+            drawDimensionLine(ctxEle, x0, middle + edgeH - slabH/2 + 10, x1, middle + edgeH - slabH/2 + 10, `${be}mm`, 10);
+        }
+
+        // Attach listeners to all inputs for real-time update
+        window.onload = () => {
+            const inputs = document.querySelectorAll('input, select');
+            inputs.forEach(input => {
+                input.addEventListener('input', calculate);
+            });
+            renderColumnList();
+            calculate();
+        };
+    </script>
+</body>
+</html>

@@ -18,7 +18,7 @@
       }
     };
     </script>
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/polyfill/3.27.4/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
     <!-- Three.js for 3D Visualization -->
@@ -108,24 +108,8 @@
         <div class="input-panel">
             <h2 class="panel-title">Slab Properties</h2>
             
-            <div class="section-header">Slab Boundary & Continuity</div>
-            <div class="input-group">
-                <label>Panel Location</label>
-                <select id="spanType">
-                    <option value="continuous">Continuous (Interior Panel)</option>
-                    <option value="simple">End Span (Exterior Panel)</option>
-                </select>
-            </div>
-            <div class="input-group">
-                <label>Discontinuous Edge Detail</label>
-                <select id="edgeCondition">
-                    <option value="1">Exterior edge unrestrained</option>
-                    <option value="2">Slab with beams between all supports</option>
-                    <option value="3" selected>Slab without beams (no edge beam)</option>
-                    <option value="4">Slab without beams (with edge beam)</option>
-                    <option value="5">Exterior edge fully restrained</option>
-                </select>
-            </div>
+             <div class="section-header">Slab Boundary (Interior Panel Only)</div>
+             <p style="font-size: 0.8rem; color: #64748b; margin-top: -8px; margin-bottom: 12px;">This tool is refined for Continuous (Interior) Panels.</p>
             <div class="form-row">
                 <div class="form-col">
                     <label>$L_1$ Span (mm)</label>
@@ -155,11 +139,11 @@
             <div class="form-row">
                 <div class="form-col">
                     <label>Beam Width $b_w$ (mm)</label>
-                    <input type="number" id="beamBw" value="0" step="10">
+                    <input type="number" id="beamBw" value="300" step="10">
                 </div>
                 <div class="form-col">
                     <label>Beam Depth $h_b$ (mm)</label>
-                    <input type="number" id="beamH" value="0" step="10">
+                    <input type="number" id="beamH" value="400" step="10">
                 </div>
             </div>
 
@@ -265,8 +249,8 @@
 
         function calculateDesign() {
             // 1. Get Inputs
-            const spanType = document.getElementById('spanType').value;
-            const edgeCond = parseInt(document.getElementById('edgeCondition').value);
+            const spanType = 'continuous';
+            const edgeCond = 2; // Fixed to beams context
             const l1 = parseFloat(document.getElementById('l1').value); // Long Span
             const l2 = parseFloat(document.getElementById('l2').value); // Short Span
             const col = parseFloat(document.getElementById('colSize').value);
@@ -298,112 +282,135 @@
             // 3. DDM Limitations Check (ACI 13.6.1)
             const l_ratio_check = Math.max(l1, l2) / Math.min(l1, l2);
             const load_ratio_check = w_l / w_d_total;
-            const isDDMValid = l_ratio_check <= 2.0 && load_ratio_check <= 2.0;
+            const isDDMValid = l_ratio_check <= 2.0 && load_ratio_check <= 2.0;            // 3. Structural Properties (Directional)
+            function getAlpha(span_len, beam_w, beam_h, s_thick) {
+                if (beam_w <= 0 || beam_h <= 0) return 0;
+                // Effective Beam Width (ACI 13.2.4) - Simplified
+                const be = Math.min(beam_w + 2 * (beam_h - s_thick), beam_w + 8 * s_thick); 
+                const Ib = (beam_w * Math.pow(beam_h, 3)) / 12 + (be - beam_w) * Math.pow(s_thick, 3) / 12; // Very simplified T-beam
+                const Is = (span_len * Math.pow(s_thick, 3)) / 12;
+                return Ib / Is;
+            }
+
+            const alpha_f1 = getAlpha(l2, beamBw, beamH, h); // l2 is width for l1 span
+            const alpha_f2 = getAlpha(l1, beamBw, beamH, h); 
+
+            // Beta_t logic (Torsional Stiffness)
+            let beta_t = 0;
+            if (beamBw > 0 && beamH > 0) {
+                // Simplified C factor for edge beam
+                const x = Math.min(beamBw, beamH);
+                const y = Math.max(beamBw, beamH);
+                const C = (1 - 0.63 * x / y) * (Math.pow(x, 3) * y / 3);
+                const Is_edge = (l2 * Math.pow(h, 3)) / 12;
+                beta_t = E_STEEL * C / (2 * Ec * Is_edge); 
+            }
+
+
             let stiffness_details = { l1: null, l2: null };
 
             // 4. Analysis Helper (DDM or EFM)
-            function analyzeDirection(span_l1, span_l2, alpha_f, dirKey) {
-                const ln = span_l1 - col;
+            function analyzeDirection(l_span, l_trans, alpha_f_dir, dirKey) {
+                const ln = l_span - col;
                 const ln_m = ln / 1000;
-                const l2_m = span_l2 / 1000;
+                const l2_m = l_trans / 1000;
                 const Mo = (w_u * l2_m * Math.pow(ln_m, 2)) / 8;
+                
                 let method_used = "DDM";
-                // Table 16.2 Distribution
-                let neg_factor = 0.65, pos_factor = 0.35, ext_neg_factor = 0;
-                if (spanType === 'simple') {
-                    const factors = {
-                        1: [0.75, 0.63, 0],
-                        2: [0.70, 0.57, 0.16],
-                        3: [0.70, 0.52, 0.26],
-                        4: [0.70, 0.50, 0.30],
-                        5: [0.65, 0.35, 0.65]
-                    };
-                    [neg_factor, pos_factor, ext_neg_factor] = factors[edgeCond];
+                if (!isDDMValid) method_used = "EFM";
 
-                    // EFM Logic if DDM is invalid (Chapter 17)
-                    if (!isDDMValid) {
-                        method_used = "EFM";
-                        const Is = (span_l2 * Math.pow(h, 3)) / 12;
-                        const Ic = (Math.pow(col, 4)) / 12;
-                        const Ks = 4 * Ec * Is / span_l1;
-                        const Kc = 4 * Ec * Ic / colHeight;
-                        const C = (1 - 0.63 * h / col) * (Math.pow(h, 3) * col / 3);
-                        const Kt = (9 * Ec * C) / (span_l2 * Math.pow(1 - col/span_l2, 3));
-                        const Kec = (2 * Kc * 2 * Kt) / (2 * Kc + 2 * Kt);
-                        const alpha_ec = Kec / Ks;
-                        ext_neg_factor = 0.65 * (alpha_ec / (1 + alpha_ec));
-                        pos_factor = 0.63 - 0.28 * (alpha_ec / (1 + alpha_ec));
-                        neg_factor = 0.75 - 0.10 * (alpha_ec / (1 + alpha_ec));
-                        stiffness_details[dirKey] = { Ks, Kc, Kt, Kec, alpha_ec };
-                    }
-                }
+                // Interior Panel: 0.65 to Neg, 0.35 to Pos
+                const neg_factor = 0.65;
+                const pos_factor = 0.35;
+                const ext_neg_factor = 0.65;
 
-                const M_neg = neg_factor * Mo;
+                const M_int_neg = neg_factor * Mo;
                 const M_pos = pos_factor * Mo;
                 const M_ext_neg = ext_neg_factor * Mo;
 
-                // CS Percentages (Equations from Chapter 16.8)
-                const alpha_ratio = Math.min(alpha_f * span_l2 / span_l1, 1.0);
-                const l_ratio = span_l2 / span_l1;
+                // CS Percentages (ACI 13.6.4)
+                const alpha_ratio = Math.min(alpha_f_dir * l_trans / l_span, 1.0);
+                const l_ratio = l_trans / l_span;
                 
-                const pct_int_neg = 75 + 30 * alpha_ratio * (1 - l_ratio);
-                const pct_pos = 60 + 30 * alpha_ratio * (1.5 - l_ratio);
-                // Simplified beta_t = 0 for flat plate, 2.5 for stiff edge beam
-                const beta_t = (edgeCond === 2 || edgeCond === 4) ? 2.5 : 0;
-                const pct_ext_neg = 100 - 10 * beta_t + 12 * alpha_ratio * (1 - l_ratio);
+                // Linear Interpolation Helper for ACI tables
+                function getCSPercentage(type, alpha, ratio, beta) {
+                    if (type === 'int_neg') return 75 + 30 * alpha * (1 - ratio);
+                    if (type === 'pos') return 60 + 30 * alpha * (1.5 - ratio);
+                    if (type === 'ext_neg') {
+                        // Table 13.6.4.2
+                        if (beta === 0) return 100;
+                        let val = 75 + 15 * alpha * (1 - ratio); // Simplified interpolation for beta >= 2.5
+                        if (beta < 2.5) val = 100 - (beta / 2.5) * (100 - val);
+                        return Math.min(100, Math.max(45, val));
+                    }
+                    return 0;
+                }
 
                 return {
-                    Mo, M_neg, M_pos, M_ext_neg,
-                    cs_neg: pct_int_neg / 100,
-                    cs_pos: pct_pos / 100,
-                    cs_ext_neg: pct_ext_neg / 100,
-                    ln,
-                    method: method_used
+                    Mo, M_int_neg, M_pos, M_ext_neg,
+                    pct_int_neg: getCSPercentage('int_neg', alpha_ratio, l_ratio, 0) / 100,
+                    pct_pos: getCSPercentage('pos', alpha_ratio, l_ratio, 0) / 100,
+                    pct_ext_neg: getCSPercentage('ext_neg', alpha_ratio, l_ratio, beta_t) / 100,
+                    ln, method: method_used, isEnd: spanType === 'simple'
                 };
             }
 
-            // Calculate alpha_f (Simplified)
-            const alpha_f = (beamBw > 0) ? (beamBw * Math.pow(beamH, 3)) / (l2 * Math.pow(h, 3)) : 0;
-            const res1 = analyzeDirection(l1, l2, alpha_f, 'l1');
-            const res2 = analyzeDirection(l2, l1, alpha_f, 'l2');
+            const res1 = analyzeDirection(l1, l2, alpha_f1, 'l1');
+            const res2 = analyzeDirection(l2, l1, alpha_f2, 'l2');
 
             // 5. Reinforcement Calculation
-            function getSpacing(M, width_mm, d_eff) {
-                if (M <= 0) return { spacing: 450, area: 0 };
-                let As = (M * 1e6) / (phi * fy * 0.9 * d_eff);
-                const As_min = 0.0018 * width_mm * h;
+            function getSpacing(M, b_strip, d_eff) {
+                if (M <= 0) return 450;
+                let As = (M * 1e6) / (phi * fy * 0.9 * d_eff); // Simplified d-a/2 = 0.9d
+                const As_min = 0.0018 * b_strip * h;
                 As = Math.max(As, As_min);
-                const s = Math.min(450, 2 * h, (width_mm * (Math.PI * db**2 / 4)) / As);
-                return { spacing: Math.floor(s), area: As };
+                const s = (b_strip * (Math.PI * db**2 / 4)) / As;
+                return Math.floor(Math.min(450, 2 * h, s) / 10) * 10;
             }
 
-            const d1 = {
-                cs_pos: getSpacing(res1.M_pos * res1.cs_pos, l2/2, d).spacing,
-                ms_pos: getSpacing(res1.M_pos * (1 - res1.cs_pos), l2/2, d).spacing,
-                cs_neg: getSpacing(res1.M_neg * res1.cs_neg, l2/2, d).spacing
-            };
-            const d2 = {
-                cs_pos: getSpacing(res2.M_pos * res2.cs_pos, l1/2, d - db).spacing,
-                ms_pos: getSpacing(res2.M_pos * (1 - res2.cs_pos), l1/2, d - db).spacing,
-                cs_neg: getSpacing(res2.M_neg * res2.cs_neg, l1/2, d - db).spacing
-            };
+            function designStrips(res, width, d_eff) {
+                const b_cs = (width / 2);
+                const b_ms = (width / 2);
+                return {
+                    cs_int_neg: getSpacing(res.M_int_neg * res.pct_int_neg, b_cs, d_eff),
+                    ms_int_neg: getSpacing(res.M_int_neg * (1 - res.pct_int_neg), b_ms, d_eff),
+                    cs_pos:     getSpacing(res.M_pos * res.pct_pos, b_cs, d_eff),
+                    ms_pos:     getSpacing(res.M_pos * (1 - res.pct_pos), b_ms, d_eff),
+                    cs_ext_neg: getSpacing(res.M_ext_neg * res.pct_ext_neg, b_cs, d_eff),
+                    ms_ext_neg: getSpacing(res.M_ext_neg * (1 - res.pct_ext_neg), b_ms, d_eff)
+                };
+            }
 
-            // 6. Checks
-            const ln_max = Math.max(l1, l2) - col;
-            const h_min = (spanType === 'simple') ? ln_max / 20 : ln_max / 33;
+            const d1_reinf = designStrips(res1, l2, d);
+            const d2_reinf = designStrips(res2, l1, d - db);
 
-            const Vu_1way = w_u * (res1.ln / 2000 - d / 1000);
-            const phiVc_1way = 0.75 * 0.17 * Math.sqrt(fc) * 1000 * d / 1000;
-
-            const bo = 4 * (col + d);
+            // 6. Punching Shear Safety Check
+            let bo_sides = 4;
+            if (spanType === 'simple') {
+                if (edgeCond === 1 || edgeCond === 3 || edgeCond === 4) bo_sides = 3; // Edge Column
+            }
+            const bo = (bo_sides === 4) ? 4 * (col + d) : 3 * (col + d) + (col + d/2); // Very simplified edge bo
             const Vu_punch = w_u * (l1 * l2 / 1e6 - Math.pow(col + d, 2) / 1e6);
-            const phiVc_punch = 0.75 * 0.33 * Math.sqrt(fc) * bo * d / 1000;
+            
+            // Multiple ACI Equations
+            const Vc1 = 0.33 * Math.sqrt(fc);
+            const Vc2 = 0.17 * (1 + 2/1) * Math.sqrt(fc); // Beta_c = 1 for square
+            const Vc3 = 0.083 * (2 + 40 * d / bo) * Math.sqrt(fc); // Alpha_s = 40 for interior
+            const phiVc_punch = 0.75 * Math.min(Vc1, Vc2, Vc3) * bo * d / 1000;
+
 
             // Deflection Check (Simplified Elastic)
             const Ig = (1000 * Math.pow(h, 3)) / 12;
             const w_service = w_d_total + w_l;
             const delta_elastic = (5 * w_service * Math.pow(res1.ln, 4)) / (384 * Ec * Ig);
             const delta_allow = res1.ln / 360;
+
+            // One-Way Shear (Check in L1 direction)
+            const Vu_1way = w_u * (res1.ln / 2000 - d / 1000);
+            const phiVc_1way = 0.75 * 0.17 * Math.sqrt(fc) * 1000 * d / 1000;
+
+            const ln_max = Math.max(l1, l2) - col;
+            const h_min = (spanType === 'simple') ? ln_max / 20 : ln_max / 33;
 
             // 7. Render Output
             const out = document.getElementById('output');
@@ -412,51 +419,47 @@
                     <div class="result-header"><i class="fa-solid fa-star"></i> Critical Design Results</div>
                     <div class="status-box ${isDDMValid ? 'status-success' : 'status-warning'}">
                         <i class="fa-solid ${isDDMValid ? 'fa-check-circle' : 'fa-triangle-exclamation'}"></i>
-                        <div>Method: ${isDDMValid ? 'Direct Design Method (DDM)' : 'Equivalent Frame Method (EFM)'} ${!isDDMValid ? '<br><small style="font-weight:400;">DDM limits exceeded (L/S ratio or L/D ratio). Analysis performed using EFM stiffness factors.</small>' : ''}</div>
+                        <div>Method: ${isDDMValid ? 'Direct Design Method (DDM)' : 'Equivalent Frame Method (EFM)'} ${!isDDMValid ? '<br><small style="font-weight:400;">DDM limits exceeded. Analysis performed using EFM stiffness approximations.</small>' : ''}</div>
                     </div>
                     <div class="status-box ${h >= h_min ? 'status-success' : 'status-danger'}">
                         <i class="fa-solid ${h >= h_min ? 'fa-check-circle' : 'fa-circle-xmark'}"></i>
-                        <div>Thickness: Provided ${h}mm (Min Req: ${h_min.toFixed(0)}mm)${h < h_min ? '<br><small style="font-weight:400;">Recommendation: Increase slab thickness to meet ACI minimum requirements for deflection control.</small>' : ''}</div>
+                        <div>Thickness: Provided ${h}mm (Min Req: ${h_min.toFixed(0)}mm)</div>
                     </div>
                     <div class="status-box ${delta_elastic < delta_allow ? 'status-success' : 'status-warning'}">
                         <i class="fa-solid ${delta_elastic < delta_allow ? 'fa-check-circle' : 'fa-triangle-exclamation'}"></i>
-                        <div>Deflection: $\Delta_{calc} = ${delta_elastic.toFixed(2)}mm$ (Limit $L/360 = ${delta_allow.toFixed(2)}mm$)${delta_elastic >= delta_allow ? '<br><small style="font-weight:400;">Recommendation: Increase slab thickness or concrete strength ($f\'_c$) to reduce elastic deflection.</small>' : ''}</div>
+                        <div>Deflection: $\Delta_{calc} = ${delta_elastic.toFixed(2)}mm$ (Limit $L/360 = ${delta_allow.toFixed(2)}mm$)</div>
                     </div>
-                    <div class="status-box ${Vu_punch < phiVc_punch ? 'status-success' : 'status-danger'}">
-                        <i class="fa-solid ${Vu_punch < phiVc_punch ? 'fa-check-circle' : 'fa-circle-xmark'}"></i>
-                        <div>Punching Shear: $V_u = ${Vu_punch.toFixed(1)}kN$ vs $\phi V_c = ${phiVc_punch.toFixed(1)}kN$${Vu_punch >= phiVc_punch ? '<br><small style="font-weight:400;">Recommendation: Increase slab thickness, column size, concrete strength, or use shear reinforcement (studs/shearheads).</small>' : ''}</div>
-                    </div>
-                    <div class="status-box ${Vu_1way < phiVc_1way ? 'status-success' : 'status-danger'}">
-                        <i class="fa-solid ${Vu_1way < phiVc_1way ? 'fa-check-circle' : 'fa-circle-xmark'}"></i>
-                        <div>One-Way Shear: $V_u = ${Vu_1way.toFixed(1)}kN/m$ vs $\phi V_c = ${phiVc_1way.toFixed(1)}kN/m$${Vu_1way >= phiVc_1way ? '<br><small style="font-weight:400;">Recommendation: Increase slab thickness or concrete strength ($f\'_c$).</small>' : ''}</div>
+                    <div class="status-box ${(beamH > h) ? 'status-success' : (Vu_punch < phiVc_punch ? 'status-success' : 'status-danger')}">
+                        <i class="fa-solid ${(beamH > h) ? 'fa-shield-halved' : (Vu_punch < phiVc_punch ? 'fa-check-circle' : 'fa-circle-xmark')}"></i>
+                        <div>Punching Shear: ${(beamH > h) ? 'N/A (Two-Way Slab with Beams)' : `$V_u = ${Vu_punch.toFixed(1)}kN$ vs $\phi V_c = ${phiVc_punch.toFixed(1)}kN$ (${bo_sides}-sided)`}</div>
                     </div>
                 </div>
 
                 <div class="result-block">
-                    <div class="result-header"><i class="fa-solid fa-calculator"></i> Detailed Analysis</div>
-                    <div class="latex-row">
-                        $$ w_u = 1.2(${w_d_total.toFixed(2)}) + 1.6(${w_l}) = ${w_u.toFixed(2)} \\text{ kN/m}^2 $$
-                        $$ M_{o1} = \\frac{w_u l_2 l_{n1}^2}{8} = ${res1.Mo.toFixed(1)} \\text{ kNm} $$
-                        $$ M_{o2} = \\frac{w_u l_1 l_{n2}^2}{8} = ${res2.Mo.toFixed(1)} \\text{ kNm} $$
-                    </div>
-                    ${!isDDMValid && stiffness_details.l1 ? `
-                    <p><strong>EFM Stiffness Parameters ($L_1$):</strong></p>
-                    <div class="latex-row">
-                        $$ K_s = ${stiffness_details.l1.Ks.toExponential(2)}, \\quad K_{ec} = ${stiffness_details.l1.Kec.toExponential(2)} $$
-                        $$ \\alpha_{ec} = \\frac{K_{ec}}{K_s} = ${stiffness_details.l1.alpha_ec.toFixed(2)} $$
-                    </div>
-                    ` : ''}
-                    <p><strong>Reinforcement Summary:</strong></p>
+                    <div class="result-header"><i class="fa-solid fa-calculator"></i> Full Reinforcement Schedule</div>
                     <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
                         <tr style="background:#f8fafc; border-bottom:2px solid #eee;">
-                            <th style="padding:8px; text-align:left;">Strip</th><th style="padding:8px;">Moment</th><th style="padding:8px;">Spacing</th>
+                            <th style="padding:8px; text-align:left;">Strip / Zone</th><th style="padding:8px;">Moment</th><th style="padding:8px;">Spacing</th>
                         </tr>
-                        <tr><td style="padding:8px;">L1 Col Strip (-M)</td><td style="padding:8px; text-align:center;">${(res1.M_neg * res1.cs_neg).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d1.cs_neg} mm</td></tr>
-                        <tr><td style="padding:8px;">L1 Col Strip (+M)</td><td style="padding:8px; text-align:center;">${(res1.M_pos * res1.cs_pos).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d1.cs_pos} mm</td></tr>
-                        <tr><td style="padding:8px;">L1 Mid Strip (+M)</td><td style="padding:8px; text-align:center;">${(res1.M_pos * (1-res1.cs_pos)).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d1.ms_pos} mm</td></tr>
-                        <tr><td style="padding:8px;">L2 Col Strip (-M)</td><td style="padding:8px; text-align:center;">${(res2.M_neg * res2.cs_neg).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d2.cs_neg} mm</td></tr>
-                        <tr><td style="padding:8px;">L2 Col Strip (+M)</td><td style="padding:8px; text-align:center;">${(res2.M_pos * res2.cs_pos).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d2.cs_pos} mm</td></tr>
-                        <tr><td style="padding:8px;">L2 Mid Strip (+M)</td><td style="padding:8px; text-align:center;">${(res2.M_pos * (1-res2.cs_pos)).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d2.ms_pos} mm</td></tr>
+                        <tr style="border-bottom:1px solid #f1f5f9;"><td colspan="3" style="padding:8px; font-weight:700; background:#f1f5f9; color:var(--accent);">Direction $L_1$ (Analysis Span)</td></tr>
+                        <tr><td style="padding:8px;">Int. Negative Column Strip</td><td style="padding:8px; text-align:center;">${(res1.M_int_neg * res1.pct_int_neg).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d1_reinf.cs_int_neg} mm</td></tr>
+                        <tr><td style="padding:8px;">Int. Negative Middle Strip</td><td style="padding:8px; text-align:center;">${(res1.M_int_neg * (1-res1.pct_int_neg)).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d1_reinf.ms_int_neg} mm</td></tr>
+                        <tr><td style="padding:8px;">Positive Column Strip</td><td style="padding:8px; text-align:center;">${(res1.M_pos * res1.pct_pos).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d1_reinf.cs_pos} mm</td></tr>
+                        <tr><td style="padding:8px;">Positive Middle Strip</td><td style="padding:8px; text-align:center;">${(res1.M_pos * (1-res1.pct_pos)).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d1_reinf.ms_pos} mm</td></tr>
+                        ${res1.isEnd ? `
+                        <tr style="color:#b45309;"><td style="padding:8px;">Ext. Negative Column Strip</td><td style="padding:8px; text-align:center;">${(res1.M_ext_neg * res1.pct_ext_neg).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d1_reinf.cs_ext_neg} mm</td></tr>
+                        <tr style="color:#b45309;"><td style="padding:8px;">Ext. Negative Middle Strip</td><td style="padding:8px; text-align:center;">${(res1.M_ext_neg * (1-res1.pct_ext_neg)).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d1_reinf.ms_ext_neg} mm</td></tr>
+                        ` : ''}
+
+                        <tr style="border-bottom:1px solid #f1f5f9;"><td colspan="3" style="padding:8px; font-weight:700; background:#f1f5f9; color:var(--accent);">Direction $L_2$ (Transverse Span)</td></tr>
+                        <tr><td style="padding:8px;">Int. Negative Column Strip</td><td style="padding:8px; text-align:center;">${(res2.M_int_neg * res2.pct_int_neg).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d2_reinf.cs_int_neg} mm</td></tr>
+                        <tr><td style="padding:8px;">Int. Negative Middle Strip</td><td style="padding:8px; text-align:center;">${(res2.M_int_neg * (1-res2.pct_int_neg)).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d2_reinf.ms_int_neg} mm</td></tr>
+                        <tr><td style="padding:8px;">Positive Column Strip</td><td style="padding:8px; text-align:center;">${(res2.M_pos * res2.pct_pos).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d2_reinf.cs_pos} mm</td></tr>
+                        <tr><td style="padding:8px;">Positive Middle Strip</td><td style="padding:8px; text-align:center;">${(res2.M_pos * (1-res2.pct_pos)).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d2_reinf.ms_pos} mm</td></tr>
+                        ${res2.isEnd ? `
+                        <tr style="color:#b45309;"><td style="padding:8px;">Ext. Negative Column Strip</td><td style="padding:8px; text-align:center;">${(res2.M_ext_neg * res2.pct_ext_neg).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d2_reinf.cs_ext_neg} mm</td></tr>
+                        <tr style="color:#b45309;"><td style="padding:8px;">Ext. Negative Middle Strip</td><td style="padding:8px; text-align:center;">${(res2.M_ext_neg * (1-res2.pct_ext_neg)).toFixed(1)} kNm</td><td style="padding:8px; text-align:center;">@ ${d2_reinf.ms_ext_neg} mm</td></tr>
+                        ` : ''}
                     </table>
                 </div>
             `;
@@ -468,13 +471,13 @@
                 showL2: document.getElementById('showL2').checked
             };
 
-            lastDesignData = { l1, l2, col, h, fc, fy, db, cover, type: spanType, d1, d2, filters };
+            lastDesignData = { l1, l2, col, h, fc, fy, db, cover, type: spanType, d1_reinf, d2_reinf, filters };
 
             if (window.MathJax && MathJax.typesetPromise) {
                 MathJax.typesetPromise();
             }
 
-            drawSlab(l1, l2, col, spanType, d1, d2, filters, db);
+            drawSlab(l1, l2, col, spanType, d1_reinf, d2_reinf, filters, db);
         }
 
         function drawSlab(l1, l2, col, type, d1, d2, filters, db) {
@@ -507,6 +510,23 @@
             ctx.strokeRect(startX, startY, rectW, rectH);
             ctx.fillStyle = "#f8fafc";
             ctx.fillRect(startX, startY, rectW, rectH);
+
+            // 1b. Visual Edge Condition Indicators (only for End Span)
+            if (type === 'simple') {
+                const edgeCond = parseInt(document.getElementById('edgeCondition').value);
+                if (edgeCond === 2 || edgeCond === 4) { // Beams
+                    ctx.strokeStyle = "#94a3b8";
+                    ctx.lineWidth = 8;
+                    // Draw on the "exterior" sides (Left and Top for this panel)
+                    ctx.beginPath(); ctx.moveTo(startX, startY + rectH); ctx.lineTo(startX, startY); ctx.lineTo(startX + rectW, startY); ctx.stroke();
+                } else if (edgeCond === 5) { // Fully Restrained
+                    ctx.strokeStyle = "#334155";
+                    ctx.lineWidth = 12;
+                    ctx.setLineDash([4, 4]);
+                    ctx.beginPath(); ctx.moveTo(startX, startY + rectH); ctx.lineTo(startX, startY); ctx.lineTo(startX + rectW, startY); ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
 
             // 2. Draw Columns
             const colW = col * scale;
@@ -552,9 +572,16 @@
                     drawBarsH(startY, startY + cs_width1, d1.cs_pos, "#10b981", `L1 CS Pos: Ø${db}@${d1.cs_pos}`);
                     drawBarsH(startY + rectH - cs_width1, startY + rectH, d1.cs_pos, "#10b981", "");
                 }
-                if (filters.showNeg && type === 'continuous') {
-                    drawNegBarsH(startY, startY + cs_width1, d1.cs_neg, "#ef4444", `L1 CS Neg: Ø${db}@${d1.cs_neg}`);
-                    drawNegBarsH(startY + rectH - cs_width1, startY + rectH, d1.cs_neg, "#ef4444", "");
+                if (filters.showNeg) {
+                    // All ends (Left, Right, Top, Bottom)
+                    drawNegBarsH(startY, startY + cs_width1, d1.cs_int_neg, "#ef4444", true, "L1 CS -M");
+                    drawNegBarsH(startY, startY + cs_width1, d1.cs_int_neg, "#ef4444", false, "");
+                    drawNegBarsH(startY + rectH - cs_width1, startY + rectH, d1.cs_int_neg, "#ef4444", true, "");
+                    drawNegBarsH(startY + rectH - cs_width1, startY + rectH, d1.cs_int_neg, "#ef4444", false, "");
+                    
+                    // MS Negative (Draw on both sides)
+                    drawNegBarsH(startY + cs_width1, startY + rectH - cs_width1, d1.ms_int_neg, "#f87171", true, "");
+                    drawNegBarsH(startY + cs_width1, startY + rectH - cs_width1, d1.ms_int_neg, "#f87171", false, "");
                 }
             }
 
@@ -565,9 +592,16 @@
                     drawBarsV(startX, startX + cs_width2, d2.cs_pos, "#10b981", `L2 CS Pos: Ø${db}@${d2.cs_pos}`);
                     drawBarsV(startX + rectW - cs_width2, startX + rectW, d2.cs_pos, "#10b981", "");
                 }
-                if (filters.showNeg && type === 'continuous') {
-                    drawNegBarsV(startX, startX + cs_width2, d2.cs_neg, "#ef4444", `L2 CS Neg: Ø${db}@${d2.cs_neg}`);
-                    drawNegBarsV(startX + rectW - cs_width2, startX + rectW, d2.cs_neg, "#ef4444", "");
+                if (filters.showNeg) {
+                    // Top and Bottom Ends (Vertical bars)
+                    drawNegBarsV(startX, startX + cs_width2, d2.cs_int_neg, "#ef4444", true, "L2 CS -M");
+                    drawNegBarsV(startX, startX + cs_width2, d2.cs_int_neg, "#ef4444", false, "");
+                    drawNegBarsV(startX + rectW - cs_width2, startX + rectW, d2.cs_int_neg, "#ef4444", true, "");
+                    drawNegBarsV(startX + rectW - cs_width2, startX + rectW, d2.cs_int_neg, "#ef4444", false, "");
+
+                    // MS Negative (Draw on both sides)
+                    drawNegBarsV(startX + cs_width2, startX + rectW - cs_width2, d2.ms_int_neg, "#f87171", true, "");
+                    drawNegBarsV(startX + cs_width2, startX + rectW - cs_width2, d2.ms_int_neg, "#f87171", false, "");
                 }
             }
 
@@ -605,41 +639,50 @@
                 }
             }
 
-            function drawNegBarsH(yStart, yEnd, spacing_mm, color, label) {
+            function drawNegBarsH(yStart, yEnd, spacing_mm, color, isInterior, label) {
                 if (spacing_mm <= 0) return;
                 const stripH = yEnd - yStart;
                 const spacing_px = spacing_mm * scale;
-                let drawSpacing = Math.max(spacing_px, 8);
+                let drawSpacing = Math.max(spacing_px, 12);
                 ctx.strokeStyle = color;
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 1.8;
                 const barLen = 0.3 * l1 * scale;
                 for(let y = yStart + drawSpacing/2; y < yEnd; y += drawSpacing) {
-                    ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(startX + barLen, y); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(startX + rectW, y); ctx.lineTo(startX + rectW - barLen, y); ctx.stroke();
+                    if (isInterior) {
+                        ctx.beginPath(); ctx.moveTo(startX + rectW, y); ctx.lineTo(startX + rectW - barLen, y); ctx.stroke();
+                    } else {
+                        ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(startX + barLen, y); ctx.stroke();
+                    }
                 }
                 if (label) {
-                    ctx.fillStyle = color; ctx.font = "bold 11px Inter"; ctx.textAlign = "center";
-                    ctx.fillText(label, startX + barLen/2, yStart + stripH/2 + 4);
+                    ctx.fillStyle = color; ctx.font = "bold 10px Inter"; ctx.textAlign = "center";
+                    const xPos = isInterior ? (startX + rectW - barLen/2) : (startX + barLen/2);
+                    ctx.fillText(label, xPos, yStart + stripH/2 + 3);
                 }
             }
 
-            function drawNegBarsV(xStart, xEnd, spacing_mm, color, label) {
+            function drawNegBarsV(xStart, xEnd, spacing_mm, color, isInterior, label) {
                 if (spacing_mm <= 0) return;
                 const stripW = xEnd - xStart;
                 const spacing_px = spacing_mm * scale;
-                let drawSpacing = Math.max(spacing_px, 8);
+                let drawSpacing = Math.max(spacing_px, 12);
                 ctx.strokeStyle = color;
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 1.8;
                 const barLen = 0.3 * l2 * scale;
                 for(let x = xStart + drawSpacing/2; x < xEnd; x += drawSpacing) {
-                    ctx.beginPath(); ctx.moveTo(x, startY); ctx.lineTo(x, startY + barLen); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(x, startY + rectH); ctx.lineTo(x, startY + rectH - barLen); ctx.stroke();
+                    if (isInterior) {
+                        ctx.beginPath(); ctx.moveTo(x, startY + rectH); ctx.lineTo(x, startY + rectH - barLen); ctx.stroke();
+                    } else {
+                        ctx.beginPath(); ctx.moveTo(x, startY); ctx.lineTo(x, startY + barLen); ctx.stroke();
+                    }
                 }
                 if (label) {
                     ctx.save();
-                    ctx.translate(xStart + stripW/2, startY + barLen/2);
+                    const xPos = xStart + stripW/2;
+                    const yPos = isInterior ? (startY + rectH - barLen/2) : (startY + barLen/2);
+                    ctx.translate(xPos, yPos);
                     ctx.rotate(-Math.PI/2);
-                    ctx.fillStyle = color; ctx.font = "bold 11px Inter"; ctx.textAlign = "center";
+                    ctx.fillStyle = color; ctx.font = "bold 10px Inter"; ctx.textAlign = "center";
                     ctx.fillText(label, 0, 0);
                     ctx.restore();
                 }
@@ -702,6 +745,25 @@
             );
             scene.add(slab);
 
+            // Edge Beams (if applicable)
+            if (type === 'simple') {
+                const edgeCond = parseInt(document.getElementById('edgeCondition').value);
+                const beamBwVal = parseFloat(document.getElementById('beamBw').value) || 0;
+                const beamHVal = parseFloat(document.getElementById('beamH').value) || 0;
+                
+                if ((edgeCond === 2 || edgeCond === 4) && beamBwVal > 0 && beamHVal > h) {
+                    const beamMat = new THREE.MeshPhongMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.6 });
+                    // Beam along L1 (at Z min)
+                    const beam1 = new THREE.Mesh(new THREE.BoxGeometry(l1, beamHVal - h, beamBwVal), beamMat);
+                    beam1.position.set(0, -beamHVal/2, -l2/2 + beamBwVal/2);
+                    scene.add(beam1);
+                    // Beam along L2 (at X min)
+                    const beam2 = new THREE.Mesh(new THREE.BoxGeometry(beamBwVal, beamHVal - h, l2), beamMat);
+                    beam2.position.set(-l1/2 + beamBwVal/2, -beamHVal/2, 0);
+                    scene.add(beam2);
+                }
+            }
+
             // Columns
             const colGeom = new THREE.BoxGeometry(col, 1000, col);
             const colMat = new THREE.MeshPhongMaterial({ color: 0x475569 });
@@ -723,11 +785,18 @@
                     addBars3D(l1-40, db, d1.cs_pos, -l2/2, -l2/2 + cs_w1, -h/2 + cover + db/2, 'x', barMatPos);
                     addBars3D(l1-40, db, d1.cs_pos, l2/2 - cs_w1, l2/2, -h/2 + cover + db/2, 'x', barMatPos);
                 }
-                if (filters.showNeg && type === 'continuous') {
+                if (filters.showNeg) {
                     const len = 0.3 * l1;
-                    [[-1, -l2/2, -l2/2+cs_w1], [1, -l2/2, -l2/2+cs_w1], [-1, l2/2-cs_w1, l2/2], [1, l2/2-cs_w1, l2/2]].forEach(p => {
-                        addBars3D(len, db, d1.cs_neg, p[1], p[2], h/2 - cover - db/2, 'x', barMatNeg, p[0]*(l1/2 - len/2));
-                    });
+                    const z = h/2 - cover - db/2;
+                    // Right/Top end (+X context)
+                    addBars3D(len, db, d1.cs_int_neg, -l2/2, -l2/2 + cs_w1, z, 'x', barMatNeg, l1/2 - len/2);
+                    addBars3D(len, db, d1.cs_int_neg, l2/2 - cs_w1, l2/2, z, 'x', barMatNeg, l1/2 - len/2);
+                    addBars3D(len, db, d1.ms_int_neg, -l2/2 + cs_w1, l2/2 - cs_w1, z, 'x', barMatNeg, l1/2 - len/2);
+
+                    // Left/Bottom end (-X context)
+                    addBars3D(len, db, d1.cs_ext_neg, -l2/2, -l2/2 + cs_w1, z, 'x', barMatNeg, -l1/2 + len/2);
+                    addBars3D(len, db, d1.cs_ext_neg, l2/2 - cs_w1, l2/2, z, 'x', barMatNeg, -l1/2 + len/2);
+                    addBars3D(len, db, d1.ms_ext_neg, -l2/2 + cs_w1, l2/2 - cs_w1, z, 'x', barMatNeg, -l1/2 + len/2);
                 }
             }
             // L2 Bars (Z-axis)
@@ -737,11 +806,18 @@
                     addBars3D(l2-40, db, d2.cs_pos, -l1/2, -l1/2 + cs_w2, -h/2 + cover + db + db/2, 'z', barMatPos);
                     addBars3D(l2-40, db, d2.cs_pos, l1/2 - cs_w2, l1/2, -h/2 + cover + db + db/2, 'z', barMatPos);
                 }
-                if (filters.showNeg && type === 'continuous') {
+                if (filters.showNeg) {
                     const len = 0.3 * l2;
-                    [[-1, -l1/2, -l1/2+cs_w2], [1, -l1/2, -l1/2+cs_w2], [-1, l1/2-cs_w2, l1/2], [1, l1/2-cs_w2, l1/2]].forEach(p => {
-                        addBars3D(len, db, d2.cs_neg, p[1], p[2], h/2 - cover - db - db/2, 'z', barMatNeg, p[0]*(l2/2 - len/2));
-                    });
+                    const z = h/2 - cover - db - db/2;
+                    // Bottom/Right end (+Z context)
+                    addBars3D(len, db, d2.cs_int_neg, -l1/2, -l1/2 + cs_w2, z, 'z', barMatNeg, l2/2 - len/2);
+                    addBars3D(len, db, d2.cs_int_neg, l1/2 - cs_w2, l1/2, z, 'z', barMatNeg, l2/2 - len/2);
+                    addBars3D(len, db, d2.ms_int_neg, -l1/2 + cs_w2, l1/2 - cs_w2, z, 'z', barMatNeg, l2/2 - len/2);
+
+                    // Top/Left end (-Z context)
+                    addBars3D(len, db, d2.cs_ext_neg, -l1/2, -l1/2 + cs_w2, z, 'z', barMatNeg, -l2/2 + len/2);
+                    addBars3D(len, db, d2.cs_ext_neg, l1/2 - cs_w2, l1/2, z, 'z', barMatNeg, -l2/2 + len/2);
+                    addBars3D(len, db, d2.ms_ext_neg, -l1/2 + cs_w2, l1/2 - cs_w2, z, 'z', barMatNeg, -l2/2 + len/2);
                 }
             }
             animate();

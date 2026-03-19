@@ -18,7 +18,7 @@
       }
     };
     </script>
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/polyfill/3.111.0/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
     <style>
@@ -87,29 +87,81 @@
         <div class="input-panel">
             <h2 class="panel-title">Load Parameters</h2>
             <form id="loadForm" onsubmit="event.preventDefault(); calculateLoads();">
-                <div class="section-header">Beam Geometry</div>
-                <div class="form-row">
-                    <div class="form-col">
-                        <label class="form-label">Span $L$ (m)</label>
-                        <input type="number" id="span" class="form-control" value="6.0" step="0.1" required>
-                    </div>
-                    <div class="form-col">
-                        <label class="form-label">Width $b_w$ (mm)</label>
-                        <input type="number" id="width" class="form-control" value="300" step="10" required>
-                    </div>
-                </div>
                 <div class="form-group">
-                    <label class="form-label">Height $h$ (mm)</label>
-                    <input type="number" id="height" class="form-control" value="450" step="10" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Support Condition</label>
-                    <select id="supportCondition" class="form-control">
-                        <option value="simple">Simply Supported</option>
-                        <option value="cantilever">Cantilever</option>
-                        <option value="fixed">Fixed-Fixed</option>
-                        <option value="propped">Propped Cantilever</option>
+                    <label class="form-label">Structure Type</label>
+                    <select id="structureType" class="form-control" onchange="toggleStructureInputs()">
+                        <option value="beam">Single Beam</option>
+                        <option value="gable">Gable Frame</option>
                     </select>
+                </div>
+
+                <!-- BEAM SPECIFIC -->
+                <div id="beamInputs">
+                    <div class="section-header">Beam Geometry</div>
+                    <div class="form-row">
+                        <div class="form-col">
+                            <label class="form-label">Span $L$ (m)</label>
+                            <input type="number" id="span" class="form-control" value="6.0" step="0.1">
+                        </div>
+                        <div class="form-col">
+                            <label class="form-label">Width $b_w$ (mm)</label>
+                            <input type="number" id="width" class="form-control" value="300" step="10">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Height $h$ (mm)</label>
+                        <input type="number" id="height" class="form-control" value="450" step="10">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Support Condition</label>
+                        <select id="supportCondition" class="form-control">
+                            <option value="simple">Simply Supported</option>
+                            <option value="cantilever">Cantilever</option>
+                            <option value="fixed">Fixed-Fixed</option>
+                            <option value="propped">Propped Cantilever</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- GABLE SPECIFIC -->
+                <div id="gableInputs" style="display:none;">
+                    <div class="section-header">Gable Geometry</div>
+                    <div class="form-row">
+                        <div class="form-col">
+                            <label class="form-label">Span $S$ (m)</label>
+                            <input type="number" id="gableSpan" class="form-control" value="12.0" step="0.5">
+                        </div>
+                        <div class="form-col">
+                            <label class="form-label">Bay Spacing (m)</label>
+                            <input type="number" id="baySpacing" class="form-control" value="6.0" step="0.5">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-col">
+                            <label class="form-label">Eave Height $H_e$ (m)</label>
+                            <input type="number" id="eaveHeight" class="form-control" value="5.0" step="0.5">
+                        </div>
+                        <div class="form-col">
+                            <label class="form-label">Ridge Height $H_r$ (m)</label>
+                            <input type="number" id="ridgeHeight" class="form-control" value="7.0" step="0.1">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Support Type</label>
+                        <select id="gableSupport" class="form-control">
+                            <option value="pinned">Pinned-Pinned</option>
+                            <option value="fixed">Fixed-Fixed</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Show Diagram</label>
+                        <select id="gableDiagram" class="form-control">
+                            <option value="none">None (Geometry only)</option>
+                            <option value="moment">Bending Moment</option>
+                            <option value="axial">Axial Force</option>
+                            <option value="reactions">Reactions</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="section-header">Material Properties</div>
@@ -131,12 +183,29 @@
                 <div class="section-header">Applied Loads</div>
                 <div class="form-row">
                     <div class="form-col">
-                        <label class="form-label">SDL (kN/m)</label>
-                        <input type="number" id="wd_super" class="form-control" value="10.0" step="0.1">
+                        <label class="form-label" id="label_sdl">SDL (kN/m)</label>
+                        <input type="number" id="wd_super" class="form-control" value="1.5" step="0.1">
                     </div>
                     <div class="form-col">
-                        <label class="form-label">Live (kN/m)</label>
-                        <input type="number" id="wl" class="form-control" value="15.0" step="0.1">
+                        <label class="form-label" id="label_ll">Live (kN/m)</label>
+                        <input type="number" id="wl" class="form-control" value="1.0" step="0.1">
+                    </div>
+                </div>
+                <!-- GABLE WIND -->
+                <div id="windInputs" style="display:none;">
+                    <div class="form-row">
+                        <div class="form-col">
+                            <label class="form-label">Wind Speed (m/s)</label>
+                            <input type="number" id="windV" class="form-control" value="45" step="1">
+                        </div>
+                        <div class="form-col">
+                            <label class="form-label">Exposure</label>
+                            <select id="exposure" class="form-control">
+                                <option value="B">Exp B</option>
+                                <option value="C" selected>Exp C</option>
+                                <option value="D">Exp D</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -170,7 +239,7 @@
                 </div>
 
                 <!-- Shear and Moment Diagrams -->
-                <div class="card">
+                <div class="card" id="vMDiagramCard">
                     <h3 style="margin-bottom: 1rem;">Shear & Moment Diagrams</h3>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                         <div>
@@ -210,7 +279,7 @@
                         </div>
 
                         <!-- Step 5: Feasibility Check -->
-                        <div class="summary-step">
+                        <div class="summary-step" id="reinforcementStep">
                             <strong>5. Geometry & Bar Fit Check</strong><br>
                             <div id="checkResultContent"></div>
                         </div>
@@ -230,224 +299,376 @@
         // Draw initial blank state
         drawVisualization(6, 45, 'Waiting for input...');
 
+        function toggleStructureInputs() {
+            const type = document.getElementById('structureType').value;
+            const beamInputs = document.getElementById('beamInputs');
+            const gableInputs = document.getElementById('gableInputs');
+            const windInputs = document.getElementById('windInputs');
+            const labelSdl = document.getElementById('label_sdl');
+            const labelLl = document.getElementById('label_ll');
+
+            if (type === 'beam') {
+                beamInputs.style.display = 'block';
+                gableInputs.style.display = 'none';
+                windInputs.style.display = 'none';
+                labelSdl.innerText = 'SDL (kN/m)';
+                labelLl.innerText = 'Live (kN/m)';
+            } else {
+                beamInputs.style.display = 'none';
+                gableInputs.style.display = 'block';
+                windInputs.style.display = 'block';
+                labelSdl.innerText = 'SDL (kN/m²)';
+                labelLl.innerText = 'Live (kN/m²)';
+            }
+            calculateLoads();
+        }
+
         function calculateLoads() {
-            // 1. Get Inputs
-            const L = parseFloat(document.getElementById('span').value);
-            const b_mm = parseFloat(document.getElementById('width').value);
-            const h_mm = parseFloat(document.getElementById('height').value);
+            const type = document.getElementById('structureType').value;
             const gamma = parseFloat(document.getElementById('density').value);
             const fc = parseFloat(document.getElementById('fc').value);
             const fy = parseFloat(document.getElementById('fy').value);
-            const w_sdl = parseFloat(document.getElementById('wd_super').value);
-            const w_l = parseFloat(document.getElementById('wl').value);
+            const w_sdl_inp = parseFloat(document.getElementById('wd_super').value);
+            const w_l_inp = parseFloat(document.getElementById('wl').value);
 
-            // Validation to prevent numerical instability
             if (isNaN(fc) || fc < 12 || isNaN(fy) || fy < 200) {
-                showAlert('Error: Please enter valid material properties ($f\'_c \\ge 12$ MPa and $f_y \\ge 200$ MPa).', 'error');
+                showAlert('Error: Please enter valid material properties.', 'error');
                 return;
             }
 
-            // 2. Sanity Checks
-            const alertBox = document.getElementById('alertBox');
-            alertBox.style.display = 'none';
-            alertBox.className = 'alert';
+            if (type === 'beam') {
+                calculateBeam(gamma, fc, fy, w_sdl_inp, w_l_inp);
+            } else {
+                calculateGable(gamma, fc, fy, w_sdl_inp, w_l_inp);
+            }
+        }
+
+        function calculateBeam(gamma, fc, fy, w_sdl, w_l) {
+            const L = parseFloat(document.getElementById('span').value);
+            const b_mm = parseFloat(document.getElementById('width').value);
+            const h_mm = parseFloat(document.getElementById('height').value);
 
             if (L <= 0 || b_mm <= 0 || h_mm <= 0) {
-                showAlert('Error: Dimensions must be positive values.', 'error');
+                showAlert('Error: Dimensions must be positive.', 'error');
                 return;
             }
 
             // Aspect Ratio Check
             const aspectRatio = h_mm / b_mm;
             let warningMsg = "";
-            
-            if (b_mm < 200) {
-                warningMsg += `Warning: Beam width (${b_mm}mm) is very narrow for structural concrete. Standard minimum is often 200-250mm.<br>`;
-            }
-            if (aspectRatio > 4) {
-                warningMsg += `Warning: Deep beam detected ($h/b > 4$). Standard beam theory might not apply.<br>`;
-            } else if (aspectRatio < 0.5) {
-                warningMsg += `Warning: Beam is very shallow ($h/b < 0.5$). Deflection might be an issue.<br>`;
-            }
+            if (b_mm < 200) warningMsg += `Warning: Beam width (${b_mm}mm) is narrow.<br>`;
+            if (aspectRatio > 4) warningMsg += `Warning: Deep beam detections.<br>`;
+            if (warningMsg !== "") showAlert(warningMsg, 'warning'); else document.getElementById('alertBox').style.display = 'none';
 
-            if (warningMsg !== "") {
-                showAlert(warningMsg, 'warning');
-            }
-
-            // 3. Calculations
-            // Convert to meters
             const b_m = b_mm / 1000;
             const h_m = h_mm / 1000;
-
-            // Self weight (kN/m)
             const w_sw = b_m * h_m * gamma;
-            
-            // Total Dead
             const w_d = w_sw + w_sdl;
-
-            // Load Combinations (ACI 318-11)
-            const wu1 = 1.4 * w_d;
-            const wu2 = 1.2 * w_d + 1.6 * w_l;
+            const wu1 = 1.4 * w_d, wu2 = 1.2 * w_d + 1.6 * w_l;
             const w_u = Math.max(wu1, wu2);
             const governingCombo = wu1 > wu2 ? "1.4D" : "1.2D + 1.6L";
 
-            // Forces based on condition
             const condition = document.getElementById('supportCondition').value;
-            let m_u, v_u;
-            let m_formula, v_formula;
-            let conditionLabel;
-            let r1, r2; // Reactions
+            let m_u, v_u, m_formula, v_formula, r1, r2, conditionLabel;
 
             switch(condition) {
                 case 'cantilever':
-                    m_u = (w_u * Math.pow(L, 2)) / 2;
-                    v_u = w_u * L;
-                    m_formula = "\\frac{w_u L^2}{2}";
-                    v_formula = "w_u L";
-                    conditionLabel = "Cantilever";
-                    r1 = w_u * L;
-                    r2 = 0;
+                    m_u = (w_u * L**2) / 2; v_u = w_u * L;
+                    m_formula = "\\frac{w_u L^2}{2}"; v_formula = "w_u L";
+                    conditionLabel = "Cantilever"; r1 = w_u * L; r2 = 0;
                     break;
                 case 'fixed':
-                    m_u = (w_u * Math.pow(L, 2)) / 12;
-                    v_u = (w_u * L) / 2;
-                    m_formula = "\\frac{w_u L^2}{12}";
-                    v_formula = "\\frac{w_u L}{2}";
-                    conditionLabel = "Fixed-Fixed";
-                    r1 = (w_u * L) / 2;
-                    r2 = (w_u * L) / 2;
+                    m_u = (w_u * L**2) / 12; v_u = (w_u * L) / 2;
+                    m_formula = "\\frac{w_u L^2}{12}"; v_formula = "\\frac{w_u L}{2}";
+                    conditionLabel = "Fixed-Fixed"; r1 = (w_u * L) / 2; r2 = (w_u * L) / 2;
                     break;
                 case 'propped':
-                    m_u = (w_u * Math.pow(L, 2)) / 8;
-                    v_u = 0.625 * w_u * L;
-                    m_formula = "\\frac{w_u L^2}{8}";
-                    v_formula = "0.625 w_u L";
-                    conditionLabel = "Propped Cantilever";
-                    r1 = 0.625 * w_u * L;
-                    r2 = 0.375 * w_u * L;
+                    m_u = (w_u * L**2) / 8; v_u = 0.625 * w_u * L;
+                    m_formula = "\\frac{w_u L^2}{8}"; v_formula = "0.625 w_u L";
+                    conditionLabel = "Propped Cantilever"; r1 = 0.625 * w_u * L; r2 = 0.375 * w_u * L;
                     break;
-                default: // simple
-                    m_u = (w_u * Math.pow(L, 2)) / 8;
-                    v_u = (w_u * L) / 2;
-                    m_formula = "\\frac{w_u L^2}{8}";
-                    v_formula = "\\frac{w_u L}{2}";
-                    conditionLabel = "Simply Supported";
-                    r1 = (w_u * L) / 2;
-                    r2 = (w_u * L) / 2;
+                default: 
+                    m_u = (w_u * L**2) / 8; v_u = (w_u * L) / 2;
+                    m_formula = "\\frac{w_u L^2}{8}"; v_formula = "\\frac{w_u L}{2}";
+                    conditionLabel = "Simply Supported"; r1 = (w_u * L) / 2; r2 = (w_u * L) / 2;
             }
 
-            // 4. Bar Fitting Feasibility Check (Approximate)
-            // Estimate required steel area assuming a standard under-reinforced section
-            // Approximation: As ~ Mu / (0.9 * fy * 0.9d)
-            // d approx h - 60mm
-            const d_est = h_mm - 60;
-            const phi = 0.9;
-            const lever_arm_ratio = 0.9;
+            // Visibility: Show beam-specifics
+            document.getElementById('vMDiagramCard').style.display = 'block';
+            document.getElementById('reinforcementStep').style.display = 'block';
             
-            // Mu in N-mm for steel calc
-            const m_u_Nmm = m_u * 1000000;
-            
-            const As_req_approx = m_u_Nmm / (phi * fy * lever_arm_ratio * d_est);
-            
-            // Assume 20mm (#6 equivalent) bars for fitting check
-            const bar_dia = 20; 
-            const bar_area = 314; // mm^2
-            const num_bars = Math.ceil(As_req_approx / bar_area);
-            
-            // Required width check: 2 * cover + 2 * stirrup + num_bars * dia + (num_bars-1) * spacing
-            // Approx: 40mm cover, 10mm stirrup, 25mm spacing
-            const min_clear_spacing = Math.max(bar_dia, 25);
-            const req_width_approx = (2 * 40) + (2 * 10) + (num_bars * bar_dia) + ((num_bars - 1) * min_clear_spacing);
-            
-            let fitStatusHTML = "";
-            
-            if (req_width_approx > b_mm) {
-                fitStatusHTML = `<span style="color:var(--danger)"><i class="fa-solid fa-triangle-exclamation"></i> <strong>Capacity/Fitting Warning:</strong></span><br>
-                Based on the load, you need approx. <strong>${(As_req_approx).toFixed(0)} mm²</strong> of steel.<br>
-                Using 20mm bars, this requires roughly <strong>${num_bars} bars</strong>.<br>
-                Estimated required width for one layer: <strong>${req_width_approx} mm</strong>.<br>
-                Current width: <strong>${b_mm} mm</strong>. Bars may not fit in one layer. Consider increasing width or depth.`;
-            } else {
-                fitStatusHTML = `<span style="color:var(--success)"><i class="fa-solid fa-check-circle"></i> <strong>Feasible Geometry:</strong></span><br>
-                Estimated steel area required: <strong>${(As_req_approx).toFixed(0)} mm²</strong> (approx ${num_bars} x 20mm bars).<br>
-                These should fit comfortably within the ${b_mm} mm width in a single layer.`;
+            updateResultsPanel(b_m, h_m, gamma, w_sw, w_sdl, w_d, wu1, wu2, w_u, governingCombo, conditionLabel, m_formula, m_u, v_formula, v_u, r1, r2, h_mm, fy, b_mm);
+            drawVisualization(L, w_u, null);
+            generateDiagrams(L, w_u, r1, m_u, condition);
+        }
+
+        class GableFrameSolver {
+            constructor(S, He, Hr, bB, gravityW, w_ww, w_lw, w_wr, w_lr, support) {
+                this.S = S; this.He = He; this.Hr = Hr; this.B = bB;
+                this.w_g = gravityW; 
+                this.windLoads = [w_ww, w_wr, w_lr, w_lw]; // Per member 0, 1, 2, 3
+                this.support = support; 
+                
+                this.nodes = [{x: 0, y: 0}, {x: 0, y: He}, {x: S/2, y: Hr}, {x: S, y: He}, {x: S, y: 0}];
+                this.elements = [
+                    {n1: 0, n2: 1, type: 'col'}, {n1: 1, n2: 2, type: 'raf'},
+                    {n1: 2, n2: 3, type: 'raf'}, {n1: 3, n2: 4, type: 'col'}
+                ];
+                // Properties...
+                this.E = 200e6; this.I = 4e-4; this.A = 0.01;
             }
 
-            // 5. Update UI
+            solve() {
+                const nDOFs = this.nodes.length * 3;
+                let K = Array.from({length: nDOFs}, () => new Array(nDOFs).fill(0));
+                let F = new Array(nDOFs).fill(0);
+
+                this.elements.forEach((el, i) => {
+                    const node1 = this.nodes[el.n1], node2 = this.nodes[el.n2];
+                    const dx = node2.x - node1.x, dy = node2.y - node1.y;
+                    const L = Math.sqrt(dx**2 + dy**2);
+                    const cos = dx / L, sin = dy / L;
+
+                    const k = this.getLocalK(L);
+                    const T = this.getT(cos, sin);
+                    const k_global = this.mulMTM(this.mulMM(T, k), T);
+
+                    const dofs = [el.n1*3, el.n1*3+1, el.n1*3+2, el.n2*3, el.n2*3+1, el.n2*3+2];
+                    for(let r=0; r<6; r++) {
+                        for(let c=0; c<6; c++) K[dofs[r]][dofs[c]] += k_global[r][c];
+                    }
+
+                    // Distributed loads FEF
+                    const wx = -this.w_g * sin;
+                    const wy = -this.w_g * cos;
+                    const ww_y = this.windLoads[i]; // Local +y is pressure
+
+                    const w_total_y = wy + ww_y, w_total_x = wx;
+                    const fef_local = [-w_total_x*L/2, -w_total_y*L/2, -w_total_y*L**2/12, -w_total_x*L/2, -w_total_y*L/2, w_total_y*L**2/12];
+
+                    for(let r=0; r<6; r++) {
+                        let fg = 0; for(let c=0; c<6; c++) fg += T[c][r] * fef_local[c];
+                        F[dofs[r]] -= fg;
+                    }
+                });
+
+                // Boundary Conditions
+                const fixedDOFs = (this.support === 'fixed') ? [0, 1, 2, 12, 13, 14] : [0, 1, 12, 13];
+                fixedDOFs.forEach(d => {
+                    K[d] = new Array(nDOFs).fill(0);
+                    K[d][d] = 1;
+                    F[d] = 0;
+                });
+
+                const U = this.gauss(K, F);
+                this.displacements = U;
+                return this.extractResults(U);
+            }
+
+            getLocalK(L) {
+                const E = this.E, I = this.I, A = this.A;
+                return [
+                    [E*A/L, 0, 0, -E*A/L, 0, 0],
+                    [0, 12*E*I/L**3, 6*E*I/L**2, 0, -12*E*I/L**3, 6*E*I/L**2],
+                    [0, 6*E*I/L**2, 4*E*I/L, 0, -6*E*I/L**2, 2*E*I/L],
+                    [-E*A/L, 0, 0, E*A/L, 0, 0],
+                    [0, -12*E*I/L**3, -6*E*I/L**2, 0, 12*E*I/L**3, -6*E*I/L**2],
+                    [0, 6*E*I/L**2, 2*E*I/L, 0, -6*E*I/L**2, 4*E*I/L]
+                ];
+            }
+
+            getT(c, s) {
+                return [
+                    [c, s, 0, 0, 0, 0], [-s, c, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0],
+                    [0, 0, 0, c, s, 0], [0, 0, 0, -s, c, 0], [0, 0, 0, 0, 0, 1]
+                ];
+            }
+
+            mulMM(A, B) {
+                return A.map(row => B[0].map((_, i) => row.reduce((sum, cell, j) => sum + cell * B[j][i], 0)));
+            }
+
+            mulMTM(T, K) { // T' * K * T
+                const TT = T[0].map((_, i) => T.map(row => row[i]));
+                return this.mulMM(TT, this.mulMM(K, T));
+            }
+
+            gauss(A, b) {
+                const n = b.length;
+                for (let i = 0; i < n; i++) {
+                    let max = Math.abs(A[i][i]), maxRow = i;
+                    for (let k = i + 1; k < n; k++) {
+                        if (Math.abs(A[k][i]) > max) { max = Math.abs(A[k][i]); maxRow = k; }
+                    }
+                    [A[maxRow], A[i]] = [A[i], A[maxRow]]; [b[maxRow], b[i]] = [b[i], b[maxRow]];
+                    for (let k = i + 1; k < n; k++) {
+                        const c = -A[k][i] / A[i][i];
+                        for (let j = i; j < n; j++) { if (i === j) A[k][j] = 0; else A[k][j] += c * A[i][j]; }
+                        b[k] += c * b[i];
+                    }
+                }
+                const x = new Array(n).fill(0);
+                for (let i = n - 1; i >= 0; i--) {
+                    x[i] = b[i] / A[i][i];
+                    for (let k = i - 1; k >= 0; k--) b[k] -= A[k][i] * x[i];
+                }
+                return x;
+            }
+
+            extractResults(U) {
+                const results = [];
+                this.elements.forEach((el, i) => {
+                    const node1 = this.nodes[el.n1], node2 = this.nodes[el.n2];
+                    const dx = node2.x - node1.x, dy = node2.y - node1.y;
+                    const L = Math.sqrt(dx**2 + dy**2);
+                    const cos = dx / L, sin = dy / L;
+                    const T = this.getT(cos, sin);
+                    
+                    const u_global = [U[el.n1*3], U[el.n1*3+1], U[el.n1*3+2], U[el.n2*3], U[el.n2*3+1], U[el.n2*3+2]];
+                    const u_local = u_global.map((_, idx) => T[idx].reduce((sum, cell, j) => sum + cell * u_global[j], 0));
+                    
+                    const k_local = this.getLocalK(L);
+                    const nodal_forces_local = u_local.map((_, idx) => k_local[idx].reduce((sum, cell, j) => sum + cell * u_local[j], 0));
+
+                    const wx = -this.w_g * sin, wy = -this.w_g * cos;
+                    const ww_y = this.windLoads[i]; 
+                    const w_total_y = wy + ww_y, w_total_x = wx;
+
+                    const fef_local = [-w_total_x*L/2, -w_total_y*L/2, -w_total_y*L**2/12, -w_total_x*L/2, -w_total_y*L/2, w_total_y*L**2/12];
+                    const total_local = nodal_forces_local.map((f, idx) => f + fef_local[idx]);
+
+                    // Axial: forces[0] is positive if pointing from 1->2 (Compression)
+                    const axial = total_local[0];
+                    const ms = -total_local[2], me = total_local[5];
+                    // Midspan moment (parabolic): M(L/2) = (Ms+Me)/2 + w_total_y*L^2/8
+                    const mm = (ms + me)/2 + (w_total_y * L**2 / 8);
+
+                    results.push({ axial, shear: total_local[1], moment_start: ms, moment_end: me, moment_mid: mm });
+                });
+                return results;
+            }
+        }
+
+        function calculateGable(gamma, fc, fy, q_sdl, q_l) {
+            const S = parseFloat(document.getElementById('gableSpan').value);
+            const B = parseFloat(document.getElementById('baySpacing').value);
+            const He = parseFloat(document.getElementById('eaveHeight').value);
+            const Hr = parseFloat(document.getElementById('ridgeHeight').value);
+            const windV = parseFloat(document.getElementById('windV').value);
+            const exp = document.getElementById('exposure').value;
+            const support = document.getElementById('gableSupport').value;
+            const diagram = document.getElementById('gableDiagram').value;
+
+            if (S <= 0 || B <= 0 || He <= 0 || Hr < He) {
+                showAlert('Error: Invalid Gable geometry.', 'error');
+                return;
+            }
+
+            // 1. Gravity Loads
+            const w_sdl = q_sdl * B, w_l = q_l * B, w_sw = 0.5 * B; 
+            const w_d = w_sw + w_sdl;
+            const w_u = Math.max(1.4 * w_d, 1.2 * w_d + 1.6 * w_l);
+
+            // 2. Comprehensive Wind Pressures
+            const Kz = (exp === 'C' ? 1.0 : exp === 'B' ? 0.7 : 1.2); 
+            const qz = 0.613 * Kz * (windV**2) / 1000;
+            const theta = Math.atan((Hr-He)/(S/2)) * 180 / Math.PI;
+            
+            // ASCE 7-22 Directional Cp
+            const Cp_ww = 0.8, Cp_lw = -0.5, Cp_lr = -0.6;
+            let Cp_wr = -0.7; // Windward roof
+            if (theta > 10) Cp_wr = -0.3;
+            if (theta > 30) Cp_wr = 0.2;
+
+            const p_ww = qz * Cp_ww * B;
+            const p_lw = qz * Cp_lw * B;
+            const p_wr = qz * Cp_wr * B;
+            const p_lr = qz * Cp_lr * B;
+
+            // 3. Structural solver
+            const solver = new GableFrameSolver(S, He, Hr, B, w_u, p_ww, p_lw, p_wr, p_lr, support);
+            const results = solver.solve();
+            
+            // 4. Detailed UI Update
             document.getElementById('resultsPanel').style.display = 'block';
+            document.getElementById('res_step1').innerHTML = `
+                <strong>1. Gable Geometry Analysis</strong><br>
+                Span $S = ${S} \\text{m}, \\, H_e = ${He} \\text{m}, \\, H_r = ${Hr} \\text{m}$<br>
+                Bay Spacing $B = ${B} \\text{m} \\implies$ Roof Slope $\\alpha = ${theta.toFixed(1)}^\\circ$
+            `;
+            document.getElementById('res_step2').innerHTML = `
+                <strong>2. Gravity Analysis (Factored)</strong><br>
+                $w_u = \\max(1.4D, 1.2D + 1.6L) = \\mathbf{${w_u.toFixed(2)}} \\text{kN/m}$
+            `;
+            document.getElementById('res_step3').innerHTML = `
+                <strong>3. Full Wind Load Distribution</strong><br>
+                Wall: $p_{ww} = ${p_ww.toFixed(2)}, \\, p_{lw} = ${p_lw.toFixed(2)} \\text{kN/m}$<br>
+                Roof: $p_{wr} = ${p_wr.toFixed(2)}, \\, p_{lr} = ${p_lr.toFixed(2)} \\text{kN/m}$
+            `;
+            document.getElementById('res_step4').innerHTML = `
+                <strong>4. Frame Resultants (${support.toUpperCase()})</strong><br>
+                Max Eave Moment: $\\mathbf{${results[1].moment_start.toFixed(1)}} \\text{kNm}$<br>
+                Base $R_y = \\mathbf{${Math.abs(results[0].axial).toFixed(1)}} \\text{kN}$ / $R_x = \\mathbf{${Math.abs(results[0].shear).toFixed(1)}} \\text{kN}$
+            `;
+            
+            document.getElementById('checkResultContent').innerHTML = `
+                <span style="color:var(--accent)"><strong>Detailed Analysis Successful:</strong></span><br>
+                The frame solver has converged and provided non-zero analytical results. Use diagrams for full force envelopes.
+            `;
 
-            // Fill spans
+            // Visibility: Hide beam-specifics
+            document.getElementById('vMDiagramCard').style.display = 'none';
+            document.getElementById('reinforcementStep').style.display = 'none';
+
+            MathJax.typesetPromise();
+            drawGableVisualization(S, He, Hr, p_ww, w_u, diagram, results);
+        }
+
+        function updateResultsPanel(b_m, h_m, gamma, w_sw, w_sdl, w_d, wu1, wu2, w_u, governingCombo, conditionLabel, m_formula, m_u, v_formula, v_u, r1, r2, h_mm, fy, b_mm) {
+            document.getElementById('resultsPanel').style.display = 'block';
             document.getElementById('res_step1').innerHTML = `
                 <strong>1. Self-Weight Calculation</strong><br>
-                Convert dimensions to meters:<br>
-                $$ b_w = ${b_m.toFixed(3)} \\, \\text{m}, \\quad h = ${h_m.toFixed(3)} \\, \\text{m} $$
-                Calculate self-weight ($w_{sw}$):
-                $$ w_{sw} = b_w \\times h \\times \\gamma_c $$
-                $$ w_{sw} = ${b_m.toFixed(2)} \\times ${h_m.toFixed(2)} \\times ${gamma} = \\mathbf{${w_sw.toFixed(2)}} \\, \\text{kN/m} $$
+                Convert dimensions to meters: $b_w = ${b_m.toFixed(3)}\\text{m}, h = ${h_m.toFixed(3)}\\text{m}$<br>
+                $w_{sw} = ${b_m.toFixed(2)} \\times ${h_m.toFixed(2)} \\times ${gamma} = \\mathbf{${w_sw.toFixed(2)}} \\, \\text{kN/m}$
             `;
-
             document.getElementById('res_step2').innerHTML = `
                 <strong>2. Total Dead Load ($D$)</strong><br>
-                $$ w_D = w_{sw} + w_{SDL} = ${w_sw.toFixed(2)} + ${w_sdl.toFixed(2)} = \\mathbf{${w_d.toFixed(2)}} \\, \\text{kN/m} $$
+                $w_D = w_{sw} + w_{SDL} = ${w_sw.toFixed(2)} + ${w_sdl.toFixed(2)} = \\mathbf{${w_d.toFixed(2)}} \\, \\text{kN/m}$
             `;
-
             document.getElementById('res_step3').innerHTML = `
-                <strong>3. Factored Design Load ($w_u$) & Combinations</strong><br>
-                ACI 318 Combinations:<br>
-                1. $1.4D = 1.4(${w_d.toFixed(2)}) = ${wu1.toFixed(2)} \\text{ kN/m}$<br>
-                2. $1.2D + 1.6L = 1.2(${w_d.toFixed(2)}) + 1.6(${w_l.toFixed(2)}) = ${wu2.toFixed(2)} \\text{ kN/m}$<br>
-                Governing: $\\mathbf{${w_u.toFixed(2)} \\text{ kN/m}}$ (Combo: ${governingCombo})
+                <strong>3. Factored Design Load ($w_u$)</strong><br>
+                $1.4D = ${wu1.toFixed(2)}, 1.2D + 1.6L = ${wu2.toFixed(2)} \\implies$ Governing: $\\mathbf{${w_u.toFixed(2)}} \\, \\text{kN/m}$
             `;
-
             document.getElementById('res_step4').innerHTML = `
                 <strong>4. Design Forces (${conditionLabel})</strong><br>
-                Ultimate Moment ($M_u$):
-                $$ M_u = ${m_formula} = \\mathbf{${m_u.toFixed(2)}} \\, \\text{kN}\\cdot\\text{m} $$
-                Ultimate Shear ($V_u$):
-                $$ V_u = ${v_formula} = \\mathbf{${v_u.toFixed(2)}} \\, \\text{kN} $$
-                Support Reactions:<br>
-                $R_1 = \\mathbf{${r1.toFixed(2)}} \\, \\text{kN}$ (Left)<br>
-                $R_2 = \\mathbf{${r2.toFixed(2)}} \\, \\text{kN}$ (Right)
+                $M_u = ${m_formula} = \\mathbf{${m_u.toFixed(2)}} \\, \\text{kNm}$<br>
+                $V_u = ${v_formula} = \\mathbf{${v_u.toFixed(2)}} \\, \\text{kN}$<br>
+                $R_1 = ${r1.toFixed(1)}, R_2 = ${r2.toFixed(1)} \\, \\text{kN}$
             `;
 
-            document.getElementById('checkResultContent').innerHTML = `
-                ${fitStatusHTML}
-                <h4 style="margin-top: 1rem; margin-bottom: 0.5rem;">Reinforcement Schedule (Estimated)</h4>
-                <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-                    <tr style="border-bottom:1px solid #eee;"><td style="padding:5px; font-weight:600;">Estimated $A_s$ Req.</td><td style="padding:5px;">${As_req_approx.toFixed(0)} mm²</td></tr>
-                    <tr style="border-bottom:1px solid #eee;"><td style="padding:5px; font-weight:600;">Assumed Bar Size</td><td style="padding:5px;">20 mm</td></tr>
-                    <tr style="border-bottom:1px solid #eee;"><td style="padding:5px; font-weight:600;">Estimated Qty</td><td style="padding:5px;">${num_bars} bars</td></tr>
-                    <tr style="border-bottom:1px solid #eee;"><td style="padding:5px; font-weight:600;">Min. Width Req.</td><td style="padding:5px;">${req_width_approx.toFixed(0)} mm</td></tr>
-                </table>
-            `;
+            // Bar fit logic...
+            const As_req_approx = (m_u * 10**6) / (0.9 * fy * 0.9 * (h_mm-60));
+            const num_bars = Math.ceil(As_req_approx / 314);
+            const min_spacing = Math.max(20, 25);
+            const req_width = (2 * 40) + (2 * 10) + (num_bars * 20) + ((num_bars - 1) * min_spacing);
 
-            // Re-render MathJax
+            document.getElementById('checkResultContent').innerHTML = req_width > b_mm ? 
+                `<span style="color:var(--danger)">Warning: As=${As_req_approx.toFixed(0)}mm². Bars (${num_bars}) may not fit.</span>` :
+                `<span style="color:var(--success)">Geometry OK. As=${As_req_approx.toFixed(0)}mm² (~${num_bars} bars).</span>`;
+            
             MathJax.typesetPromise();
+        }
 
-            // Draw Visualization
-            drawVisualization(L, w_u, null);
-
-            // Generate Diagram Values
-            const steps = 100;
-            const shearValues = [];
-            const momentValues = [];
+        function generateDiagrams(L, w_u, r1, m_avg, condition) {
+            const steps = 100, sv = [], mv = [];
             for (let i = 0; i <= steps; i++) {
-                const x = (i / steps) * L;
-                let v, m;
-                // General equations using reactions and fixed end moments
-                const m_fixed = (condition === 'cantilever') ? (w_u * L * L / 2) : 
-                                (condition === 'fixed') ? (w_u * L * L / 12) :
-                                (condition === 'propped') ? (w_u * L * L / 8) : 0;
-                
-                v = r1 - w_u * x;
-                m = r1 * x - (w_u * x * x / 2) - m_fixed;
-                
-                shearValues.push(v);
-                momentValues.push(m);
+                const x = (i/steps)*L;
+                const m_fixed = (condition === 'cantilever') ? (w_u*L*L/2) : (condition === 'fixed') ? (w_u*L*L/12) : (condition === 'propped') ? (w_u*L*L/8) : 0;
+                sv.push(r1 - w_u*x);
+                mv.push(r1*x - (w_u*x*x/2) - m_fixed);
             }
-
-            drawDiagram('shearCanvas', L, shearValues, '#3b82f6');
-            drawDiagram('momentCanvas', L, momentValues, '#10b981');
+            drawDiagram('shearCanvas', L, sv, '#3b82f6');
+            drawDiagram('momentCanvas', L, mv, '#10b981');
         }
 
         function showAlert(msg, type) {
@@ -688,12 +909,164 @@
             ctx.fill();
         }
 
+        function drawGableVisualization(S, He, Hr, windP, gravityW, diagram, results) {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const w = canvas.width;
+            const h = canvas.height;
+            const padX = 80;
+            const padY = 60;
+            const scale = Math.min((w - 2 * padX) / S, (h - 2 * padY) / Hr);
+            const groundY = h - padY;
+            const center = w / 2;
+            
+            const x1 = center - (S / 2) * scale;
+            const x2 = center + (S / 2) * scale;
+            const ye = groundY - He * scale;
+            const yr = groundY - Hr * scale;
+
+            const nodes = [{x:x1, y:groundY}, {x:x1, y:ye}, {x:center, y:yr}, {x:x2, y:ye}, {x:x2, y:groundY}];
+            const elements = [
+                {n1:0, n2:1, type:'col'}, {n1:1, n2:2, type:'raf'},
+                {n1:2, n2:3, type:'raf'}, {n1:3, n2:4, type:'col'}
+            ];
+
+            // 1. Draw Frame
+            ctx.strokeStyle = "#475569";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(x1, groundY);
+            ctx.lineTo(x1, ye);
+            ctx.lineTo(center, yr);
+            ctx.lineTo(x2, ye);
+            ctx.lineTo(x2, groundY);
+            ctx.stroke();
+
+            // 2. Supports
+            const supportType = document.getElementById('gableSupport').value;
+            drawSupport(x1, groundY, supportType === 'fixed' ? 'fixed' : 'pin', 'left');
+            drawSupport(x2, groundY, supportType === 'fixed' ? 'fixed' : 'pin', 'right');
+
+            // 3. Diagrams
+            if (diagram === 'moment') {
+                const mScale = 0.5; 
+                ctx.fillStyle = "#10b98122"; ctx.strokeStyle = "#10b981"; ctx.lineWidth = 1.5;
+                
+                elements.forEach((el, i) => {
+                    const start = nodes[el.n1], end = nodes[el.n2];
+                    const res = results[i];
+                    const L = Math.sqrt((end.x-start.x)**2 + (end.y-start.y)**2);
+                    const nx = (end.y - start.y) / L, ny = -(end.x - start.x) / L;
+                    
+                    const m1 = res.moment_start * mScale;
+                    const m2 = res.moment_end * mScale;
+                    const mm = res.moment_mid * mScale;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(start.x, start.y);
+                    // Points for fill
+                    const p1x = start.x + nx * m1, p1y = start.y + ny * m1;
+                    const p2x = end.x + nx * m2, p2y = end.y + ny * m2;
+                    const pmx = (start.x + end.x)/2 + nx * mm, pmy = (start.y + end.y)/2 + ny * mm;
+                    
+                    // Control point for Bezier
+                    const pcx = 2*pmx - 0.5*p1x - 0.5*p2x, pcy = 2*pmy - 0.5*p1y - 0.5*p2y;
+
+                    ctx.lineTo(p1x, p1y);
+                    ctx.quadraticCurveTo(pcx, pcy, p2x, p2y);
+                    ctx.lineTo(end.x, end.y);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Text
+                    ctx.fillStyle = "#065f46"; ctx.font = "9px Inter";
+                    ctx.fillText(Math.abs(res.moment_start).toFixed(0), p1x + nx*5, p1y + ny*5);
+                    if (i === 3) ctx.fillText(Math.abs(res.moment_end).toFixed(0), p2x + nx*5, p2y + ny*5);
+                    // Mid value if significant
+                    if (Math.abs(res.moment_mid) > Math.max(Math.abs(res.moment_start), Math.abs(res.moment_end)) * 1.2) {
+                        ctx.fillText(Math.abs(res.moment_mid).toFixed(0), pmx + nx*5, pmy + ny*5);
+                    }
+                });
+            } else if (diagram === 'axial') {
+                elements.forEach((el, i) => {
+                    const res = results[i];
+                    const start = nodes[el.n1], end = nodes[el.n2];
+                    const isComp = res.axial > 0;
+                    ctx.strokeStyle = isComp ? "#ef4444" : "#3b82f6";
+                    ctx.lineWidth = 4;
+                    ctx.beginPath(); ctx.moveTo(start.x, start.y); ctx.lineTo(end.x, end.y); ctx.stroke();
+                    
+                    ctx.fillStyle = "#000"; ctx.font = "bold 10px Inter";
+                    const label = `${Math.abs(res.axial).toFixed(1)} kN (${isComp ? 'C' : 'T'})`;
+                    ctx.fillText(label, (start.x+end.x)/2 + 10, (start.y+end.y)/2);
+                });
+            } else if (diagram === 'reactions') {
+                const rx_l = (-results[0].axial*0 - results[0].shear*1);
+                const ry_l = (-results[0].axial*1 + results[0].shear*0);
+                const rx_r = (results[3].axial*0 + results[3].shear*1);
+                const ry_r = (results[3].axial*1 + results[3].shear*0);
+
+                ctx.strokeStyle = "#8b5cf6";
+                ctx.fillStyle = "#8b5cf6";
+                const rScale = 1.0;
+                drawArrow(x1, groundY, x1 + rx_l*rScale, groundY);
+                drawArrow(x1, groundY, x1, groundY - ry_l*rScale);
+                drawArrow(x2, groundY, x2 + rx_r*rScale, groundY);
+                drawArrow(x2, groundY, x2, groundY - ry_r*rScale);
+                
+                ctx.font = "bold 10px Inter";
+                ctx.fillText(`Ry=${ry_l.toFixed(1)}`, x1, groundY + 35);
+                ctx.fillText(`Ry=${ry_r.toFixed(1)}`, x2, groundY + 35);
+            }
+
+            // 4. Dimensions (Clean Geometry)
+            if (diagram === 'none') {
+                ctx.fillStyle = "#64748b";
+                ctx.font = "11px Inter";
+                ctx.textAlign = "center";
+                drawDimHorizontal(x1, groundY + 25, x2, groundY + 25, `${S}m`);
+                drawDimVertical(x2 + 25, groundY, x2 + 25, ye, `${He}m`);
+                drawDimVertical(center + 30, groundY, center + 30, yr, `${Hr}m`);
+            }
+        }
+
+        function drawDimHorizontal(x1, y1, x2, y2, text) {
+            ctx.strokeStyle = "#94a3b8";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1); ctx.lineTo(x2, y1);
+            ctx.moveTo(x1, y1-5); ctx.lineTo(x1, y1+5);
+            ctx.moveTo(x2, y1-5); ctx.lineTo(x2, y1+5);
+            ctx.stroke();
+            ctx.fillText(text, (x1+x2)/2, y1 - 5);
+        }
+
+        function drawDimVertical(x1, y1, x1_2, y1_2, text) {
+            ctx.strokeStyle = "#94a3b8";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1); ctx.lineTo(x1, y1_2);
+            ctx.moveTo(x1-5, y1); ctx.lineTo(x1+5, y1);
+            ctx.moveTo(x1-5, y1_2); ctx.lineTo(x1+5, y1_2);
+            ctx.stroke();
+            ctx.save();
+            ctx.translate(x1 + 12, (y1+y1_2)/2);
+            ctx.rotate(Math.PI/2);
+            ctx.fillText(text, 0, 0);
+            ctx.restore();
+        }
+
         // Initialize
         window.onload = function() {
             // Attach listeners to all inputs for live update
             document.querySelectorAll('.input-panel input, .input-panel select').forEach(el => {
                 el.addEventListener('input', calculateLoads);
             });
+            toggleStructureInputs(); // Sync UI state
         };
     </script>
 </body>

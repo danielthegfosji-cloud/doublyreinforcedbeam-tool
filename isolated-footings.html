@@ -16,7 +16,7 @@
       }
     };
     </script>
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/polyfill/3.111.0/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
     <style>
@@ -184,6 +184,42 @@
 
         .check-pass { color: var(--success); }
         .check-fail { color: var(--error); font-weight: bold; }
+
+        /* Calculation Details */
+        .calc-details {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8fafc;
+            border-radius: 6px;
+            border-left: 2px solid #3b82f6;
+            font-size: 0.85rem;
+            color: #334155;
+            overflow-x: auto;
+        }
+
+        .calc-details.active {
+            display: block;
+        }
+
+        .toggle-details-btn {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: #475569;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 10px;
+            width: fit-content;
+        }
+
+        .toggle-details-btn:hover {
+            background: #e2e8f0;
+        }
     </style>
 </head>
 <body>
@@ -325,6 +361,8 @@
                 </select>
             </div>
             <button class="action-btn" onclick="calculate()">Recalculate View</button>
+            <button class="action-btn" onclick="runTest12_2()" style="margin-top: 10px; background: #6366f1;">Run Test (Example 12.2)</button>
+
         </div>
     </nav>
 
@@ -385,6 +423,56 @@
     </main>
 
     <script>
+        // Example 12.2 Test Function
+        function runTest12_2() {
+            // Set Inputs based on Example 12.2 (SI Converted)
+            document.getElementById('fc').value = 21;
+            document.getElementById('fy').value = 415;
+            document.getElementById('wc').value = 23.5;
+            document.getElementById('PD').value = 890;
+            document.getElementById('PL').value = 712;
+            document.getElementById('MDx').value = 0;
+            document.getElementById('MLx').value = 0;
+            document.getElementById('MDy').value = 0;
+            document.getElementById('MLy').value = 0;
+            document.getElementById('qa').value = 240;
+            document.getElementById('ws').value = 16;
+            document.getElementById('soilDepth').value = 1.5;
+            document.getElementById('c1').value = 405; // 16 in
+            document.getElementById('c2').value = 405; // 16 in
+            document.getElementById('L').value = 2.75; // 9 ft approx
+            document.getElementById('B').value = 2.75; // 9 ft approx
+            document.getElementById('h').value = 600;  // 24 in
+            document.getElementById('cc').value = 75;
+            document.getElementById('barSize').value = 25; // #8 approx
+            
+            // Trigger Calculation
+            calculate();
+            
+            // Re-render MathJax if needed
+            if (window.MathJax) {
+                MathJax.typesetPromise();
+            }
+            
+            alert("Example 12.2 data loaded successfully.");
+        }
+
+        function toggleDetails(id) {
+            const el = document.getElementById(id);
+            const btn = el.previousElementSibling;
+            if (el.classList.contains('active')) {
+                el.classList.remove('active');
+                btn.innerHTML = '<i class="fa-solid fa-calculator"></i> Show Calculations';
+            } else {
+                el.classList.add('active');
+                btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Hide Calculations';
+                // Trigger MathJax re-render for the newly visible content
+                if (window.MathJax) {
+                    MathJax.typesetPromise([el]);
+                }
+            }
+        }
+
         // Constants
         const PHI_SHEAR = 0.75;
         const PHI_FLEXURE = 0.90;
@@ -855,12 +943,21 @@
             if (spacing > 450) { spacing_status = "Too Wide ($> 450 \\text{ mm}$)"; spacing_ok = false; }
             if (spacing > 3*h) { spacing_status = "Too Wide ($> 3h$)"; spacing_ok = false; }
 
-            // 8. Development Length check (Simple Check)
-            // Basic Ld equation (Simplified)
-            // Ld approx = (fy * db) / (2 * sqrt(fc)) roughly, need real ACI metric eq
-            // Metric: Ld = (fy / (1.1 * lambda * sqrt(fc))) * db * ... factors
-            // Simplified conservative: 50 * db
-            const Ld_req = 50 * db; 
+            // 8. Development Length check (ACI 318M-11 Section 12.2.3)
+            const psi_t = 1.0; // Bottom bars
+            const psi_e = 1.0; // Uncoated
+            const psi_s = (db <= 19) ? 0.8 : 1.0; // Size factor
+            const lambda = 1.0; // Normal weight
+            
+            // cb = min(clear cover + db/2, spacing/2)
+            const cb = Math.min(cc + db/2, spacing / 2);
+            const Ktr = 0; // Transverse reinforcement index
+            const term = Math.min((cb + Ktr) / db, 2.5);
+            
+            // Ld formula (Table 12.2 or Section 12.2.3)
+            // Ld = (fy / (1.1 * lambda * sqrt(fc))) * (psi_t * psi_e * psi_s / term) * db
+            const Ld_req = (fy / (1.1 * lambda * Math.sqrt(fc))) * (psi_t * psi_e * psi_s / term) * db;
+            
             const L_avail = (proj_x * 1000) - cc;
 
             // 9. Render Output
@@ -888,22 +985,34 @@
                         $$q_{net,all} = ${q_net_allow.toFixed(2)} \\text{ kPa} \\quad q_{s,max} = ${q_s_max.toFixed(2)} \\text{ kPa}$$
                     </div>
                     ${!bearingPass ? '<div class="warning-box" style="margin-top:10px;"><i class="fa-solid fa-lightbulb"></i> <strong>Recommendation:</strong> Increase footing area ($L \\times B$) to reduce soil pressure below allowable limits.</div>' : ''}
-                    ${(q_u_max / (qa*1.5) > 1) ? '<div class="warning-box"><i class="fa-solid fa-triangle-exclamation"></i>&nbsp; Warning: Factored pressure is high.</div>' : ''}
+                    <button class="toggle-details-btn" onclick="toggleDetails('details-bearing')"><i class="fa-solid fa-calculator"></i> Show Calculations</button>
+                    <div class="calc-details" id="details-bearing">
+                        <strong>Net Allowable Bearing Pressure:</strong><br>
+                        $$q_{net,all} = q_a - \sigma_{soil} - \sigma_{conc} - \sigma_{sur}$$
+                        $$\sigma_{soil} = ${soilDepth} \\text{ m} \\times ${ws} \\text{ kN/m}^3 = ${(soilDepth * ws).toFixed(2)} \\text{ kPa}$$
+                        $$\sigma_{conc} = (${h}/1000) \\text{ m} \\times ${wc} \\text{ kN/m}^3 = ${(h/1000 * wc).toFixed(2)} \\text{ kPa}$$
+                        $$q_{net,all} = ${qa} - ${(soilDepth * ws).toFixed(2)} - ${(h/1000 * wc).toFixed(2)} - ${sur} = ${q_net_allow.toFixed(2)} \\text{ kPa}$$
+                        <br><strong>Peak Service Pressure:</strong><br>
+                        ${isEccentric ? `$$e_x = ${ex_eff_signed.toFixed(4)} \\text{ m}, e_y = ${ey_eff_signed.toFixed(4)} \\text{ m}$$` : `$$P = ${P_serv.toFixed(1)} \\text{ kN}, A = ${Af.toFixed(2)} \\text{ m}^2$$`}
+                        $$q_{s,max} = ${q_s_max.toFixed(2)} \\text{ kPa}$$
+                    </div>
                 </div>
             `;
 
-            // Card 2: Uplift
+            // Card 2: Stability
             if (isEccentric && pos !== 'center') {
                 html += `
                     <div class="check-card ${uplift_fail ? 'fail' : 'pass'}">
                         <h3>2. Stability (Uplift) <span>${uplift_fail ? '<i class="fa-solid fa-circle-xmark"></i>' : '<i class="fa-solid fa-circle-check"></i>'}</span></h3>
                         <p style="font-size:0.9rem;">Resultant eccentricity check within the kern ($L/6$).</p>
-                        ${uplift_fail ? `
-                            <div class="warning-box" style="margin-top:10px; border-left: 4px solid var(--error);">
-                                <i class="fa-solid fa-lightbulb"></i> <strong>Elegant Engineering Solutions:</strong><br>
-                                1. <strong>Increase Thickness ($h$):</strong> Adds stabilizing dead weight to pull the resultant back into the kern.<br>
-                                2. <strong>Increase Length ($L$):</strong> Expands the kern limit ($L/6$).<br>
-                                3. <strong>Offset Column:</strong> If the moment is permanent, shift the column toward the 'heel' to center the resultant.</div>` : ''}
+                        ${uplift_fail ? `<div class="warning-box">...</div>` : ''}
+                        <button class="toggle-details-btn" onclick="toggleDetails('details-stability')"><i class="fa-solid fa-calculator"></i> Show Calculations</button>
+                        <div class="calc-details" id="details-stability">
+                            <strong>Eccentricity Check:</strong><br>
+                            $$e_{limit} = L/6 = ${L.toFixed(2)} / 6 = ${(L/6).toFixed(3)} \\text{ m}$$
+                            $$e_{actual,x} = ${ex_eff_signed.toFixed(3)} \\text{ m}$$
+                            ${Math.abs(ex_eff_signed) <= L/6 ? '$$e_x \\le L/6 \\text{ (No Uplift)}$$' : '$$e_x > L/6 \\text{ (Uplift Occurs)}$$'}
+                        </div>
                     </div>
                 `;
             }
@@ -916,7 +1025,16 @@
                     <div class="math-block">
                         $$V_{u1} = ${V_u1.toFixed(1)} \\text{ kN} \\quad \\phi V_c = ${phi_Vc_1way.toFixed(1)} \\text{ kN}$$
                     </div>
-                    ${!shear1Pass ? '<div class="warning-box" style="margin-top:10px;"><i class="fa-solid fa-lightbulb"></i> <strong>Recommendation:</strong> Increase footing thickness ($h$) to enhance wide-beam shear capacity.</div>' : ''}
+                    <button class="toggle-details-btn" onclick="toggleDetails('details-shear1')"><i class="fa-solid fa-calculator"></i> Show Calculations</button>
+                    <div class="calc-details" id="details-shear1">
+                        <strong>Critical Section:</strong> $d = ${d.toFixed(0)} \\text{ mm}$ from column face.<br>
+                        <strong>Tributary Length:</strong> $x = ${proj_x.toFixed(3)} - ${(d/1000).toFixed(3)} = ${x_crit_shear.toFixed(3)} \\text{ m}$<br>
+                        <strong>Factored Shear:</strong><br>
+                        $$V_{u1} = q_{u,max} \\times B \\times x = ${q_u_max.toFixed(2)} \\times ${B} \\times ${x_crit_shear.toFixed(3)} = ${V_u1.toFixed(1)} \\text{ kN}$$
+                        <strong>Concrete Capacity (ACI):</strong><br>
+                        $$\\phi V_c = \\phi \\times 0.17 \\times \\lambda \\times \\sqrt{f'_c} \\times B \\times d$$
+                        $$\\phi V_c = 0.75 \\times 0.17 \\times 1.0 \\times \\sqrt{${fc}} \\times ${B*1000} \\times ${d} / 1000 = ${phi_Vc_1way.toFixed(1)} \\text{ kN}$$
+                    </div>
                 </div>
             `;
 
@@ -928,7 +1046,18 @@
                     <div class="math-block">
                         $$V_{u2} = ${V_u2.toFixed(1)} \\text{ kN} \\quad \\phi V_c = ${phi_Vc_punch.toFixed(1)} \\text{ kN}$$
                     </div>
-                    ${!shear2Pass ? '<div class="warning-box" style="margin-top:10px;"><i class="fa-solid fa-lightbulb"></i> <strong>Recommendation:</strong> Increase footing thickness ($h$) or column size to improve two-way shear resistance.</div>' : ''}
+                    <button class="toggle-details-btn" onclick="toggleDetails('details-punch')"><i class="fa-solid fa-calculator"></i> Show Calculations</button>
+                    <div class="calc-details" id="details-punch">
+                        <strong>Critical Perimeter:</strong> $b_0 = ${bo.toFixed(0)} \\text{ mm}$<br>
+                        <strong>Total Factored Load:</strong> $P_u = ${P_u.toFixed(1)} \\text{ kN}$<br>
+                        <strong>Factored Shear ($V_{u2}$):</strong><br>
+                        $$V_{u2} = P_u - (q_{u,max} \\times A_{crit}) = ${P_u.toFixed(1)} - (${q_u_max.toFixed(1)} \\times ${area_deduct.toFixed(3)}) = ${V_u2.toFixed(1)} \\text{ kN}$$
+                        <strong>Capacities (Min of 3):</strong><br>
+                        $$V_{c1} = 0.33 \\sqrt{f'_c} b_0 d = ${(vc1/1000).toFixed(1)} \\text{ kN}$$
+                        $$V_{c2} = 0.17(1+2/\\beta)\\sqrt{f'_c} b_0 d = ${(vc2/1000).toFixed(1)} \\text{ kN}$$
+                        $$V_{c3} = 0.083(2+\\alpha_s d/b_0)\\sqrt{f'_c} b_0 d = ${(vc3/1000).toFixed(1)} \\text{ kN}$$
+                        $$\\phi V_c = 0.75 \\times ${(Vc_punch_N/1000).toFixed(1)} = ${phi_Vc_punch.toFixed(1)} \\text{ kN}$$
+                    </div>
                 </div>
             `;
 
@@ -939,7 +1068,14 @@
                     <div class="math-block">
                         $$M_u = ${M_u.toFixed(1)} \\text{ kNm} \\quad A_{s,design} = ${As_design.toFixed(0)} \\text{ mm}^2$$
                     </div>
-                    ${!spacing_ok ? `<div class="warning-box" style="margin-top:10px;"><i class="fa-solid fa-lightbulb"></i> <strong>Recommendation:</strong> ${spacing_status}. Adjust bar size or footing thickness.</div>` : ''}
+                    <button class="toggle-details-btn" onclick="toggleDetails('details-flexure')"><i class="fa-solid fa-calculator"></i> Show Calculations</button>
+                    <div class="calc-details" id="details-flexure">
+                        <strong>Factored Moment:</strong><br>
+                        $$M_u = q_{u,max} \\times B \\times proj^2 / 2 = ${q_u_max.toFixed(2)} \\times ${B} \\times ${proj_x.toFixed(3)}^2 / 2 = ${M_u.toFixed(1)} \\text{ kNm}$$
+                        <strong>Steel Area ($A_s$):</strong><br>
+                        $$A_{s,req} = ${refined_As.toFixed(0)} \\text{ mm}^2 \\quad A_{s,min} = ${As_min.toFixed(0)} \\text{ mm}^2$$
+                        <strong>Provided:</strong> $${num_bars} - ${db} \\text{mm}$ bars ($A_{s,prov} = ${(num_bars * area_bar).toFixed(0)} \\text{ mm}^2$)
+                    </div>
                 </div>
             `;
 
@@ -967,7 +1103,7 @@
                 </tr>
                 <tr>
                     <td>Dev. Length ($l_d$) Check</td>
-                    <td>$${Ld_req.toFixed(0)} \\text{ mm}$ (Approx)</td>
+                    <td>$${Ld_req.toFixed(0)} \\text{ mm}$ (ACI 318)</td>
                     <td>$${L_avail.toFixed(0)} \\text{ mm}$</td>
                     <td class="${L_avail > Ld_req ? 'check-pass' : 'check-fail'}">${L_avail > Ld_req ? 'OK' : 'FAIL'}</td>
                 </tr>
