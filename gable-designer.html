@@ -324,10 +324,15 @@
                 const data = new Uint8Array(arrayBuffer);
                 const workbook = XLSX.read(data, {type: 'array'});
                 
-                // Assuming first sheet contains the data
-                const sheetName = workbook.SheetNames[0];
+                // Select the Database sheet (usually the second one in v16.0)
+                const sheetName = workbook.SheetNames.find(n => n.includes('Database')) || workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
                 aiscDb = XLSX.utils.sheet_to_json(worksheet);
+                
+                if (aiscDb.length > 0) {
+                    console.log("AISC DB Loaded. Sheet:", sheetName);
+                    console.log("AISC DB Keys:", Object.keys(aiscDb[0]));
+                }
                 
                 populateSections();
                 document.getElementById('dbStatus').innerHTML = `<i class="fa-solid fa-check-circle"></i> AISC Database Loaded (${aiscDb.length} shapes)`;
@@ -348,15 +353,28 @@
             const colSelect = document.getElementById('col_section');
             const rafSelect = document.getElementById('raf_section');
             
+            if (aiscDb.length === 0) return;
+
+            // Property Mapping (Handle variations in AISC Excel headers)
+            // Common keys: Type, AISC_Manual_Label
+            const sample = aiscDb[0];
+            const typeKey = Object.keys(sample).find(k => k.toLowerCase() === 'type') || 'Type';
+            const labelKey = Object.keys(sample).find(k => k.toLowerCase() === 'aisc_manual_label') || 'AISC_Manual_Label';
+
             // Filter only W shapes for simplicity in this module
-            const wShapes = aiscDb.filter(s => s.Type === 'W');
+            const wShapes = aiscDb.filter(s => s[typeKey] === 'W');
             
-            const options = wShapes.map(s => `<option value="${s.AISC_Manual_Label}">${s.AISC_Manual_Label}</option>`).join('');
+            if (wShapes.length === 0) {
+                console.warn("No W shapes found in database.");
+                return;
+            }
+
+            const options = wShapes.map(s => `<option value="${s[labelKey]}">${s[labelKey]}</option>`).join('');
             colSelect.innerHTML = options;
             rafSelect.innerHTML = options;
             
             // Set some common defaults if they exist
-            if (wShapes.find(s => s.AISC_Manual_Label === 'W12X26')) {
+            if (wShapes.find(s => s[labelKey] === 'W12X26')) {
                 colSelect.value = 'W12X26';
                 rafSelect.value = 'W12X26';
             }
@@ -393,13 +411,19 @@
             const colLabel = document.getElementById('col_section').value;
             const rafLabel = document.getElementById('raf_section').value;
             
-            const colShape = aiscDb.find(s => s.AISC_Manual_Label === colLabel);
-            const rafShape = aiscDb.find(s => s.AISC_Manual_Label === rafLabel);
+            const labelKey = Object.keys(aiscDb[0] || {}).find(k => k.toLowerCase() === 'aisc_manual_label') || 'AISC_Manual_Label';
+            const colShape = aiscDb.find(s => s[labelKey] === colLabel);
+            const rafShape = aiscDb.find(s => s[labelKey] === rafLabel);
 
             // Simplified Stress Ratio (Axial + Bending)
             // Moment in column base assumed pinned for base design, but peak moment at eave
             const M_eave = H_thrust * He; // kNm
-            const ratio = checkMember(colShape, P_reaction, M_eave);
+            let ratio = 0;
+            if (colShape) {
+                ratio = checkMember(colShape, P_reaction, M_eave);
+            } else {
+                console.error("Column shape not found:", colLabel);
+            }
 
             // 4. Render Results
             renderReactions(P_reaction, H_thrust);
@@ -409,9 +433,23 @@
         }
 
         function checkMember(shape, P, M) {
+            if (!shape) return 0;
+            
             // AISC 360-16 Simplified
-            const Ag = shape.A * 645.16; // sq inch to mm2
-            const Sx = shape.Sx * 16387.06; // inch3 to mm3
+            // Handle variations: A or Area, Sx or S_x
+            const aKey = Object.keys(shape).find(k => k === 'A' || k === 'Area') || 'A';
+            const sxKey = Object.keys(shape).find(k => k === 'Sx' || k === 'S_x') || 'Sx';
+            
+            const A_val = parseFloat(shape[aKey]);
+            const Sx_val = parseFloat(shape[sxKey]);
+
+            if (isNaN(A_val) || isNaN(Sx_val)) {
+                console.error("Invalid shape properties for", shape.AISC_Manual_Label, "A:", A_val, "Sx:", Sx_val);
+                return 0;
+            }
+
+            const Ag = A_val * 645.16; // sq inch to mm2
+            const Sx = Sx_val * 16387.06; // inch3 to mm3
             const Fy = 345; // MPa (Grade 50)
             
             const axialStress = (P * 1000) / Ag;
