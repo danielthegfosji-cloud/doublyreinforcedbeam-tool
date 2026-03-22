@@ -589,18 +589,15 @@
             const area_tie = (Math.PI * db_tie**2) / 4;
             const n_tie_legs = Math.ceil(maxAsTie / area_tie);
 
-            // Edge Beam Calculation (NEW)
+            // Edge Beam Calculation (ACI 10.5.1 Compliant)
             const edgeSpan = 5.0; // m (based on column spacing)
-            const Mu_edge = (maxVuP * edgeSpan) / (8 * 1000); // kNm (Factored Beam Moment)
+            const Mu_edge = (maxVuP * edgeSpan) / (8 * 1000); 
             const As_edge_flex = (Mu_edge * 1e6) / (0.9 * fy * 0.9 * d_edge);
-            const As_edge_min = Math.max(0.0018 * be * he, (1.4 / fy) * be * d_edge * 0.5); 
-            const As_edge_req = Math.max(As_edge_flex, As_edge_min);
+            
+            // ACI 10.5.1 Beam Min Steel
+            const As_min_beam = Math.max( (0.25 * Math.sqrt(fc) / fy) * be * d_edge, (1.4 / fy) * be * d_edge );
+            const As_edge_req = Math.max(As_edge_flex, As_min_beam);
             const n_edge_req = Math.max(2, Math.ceil(As_edge_req / ((Math.PI * db_edge**2) / 4)));
-
-            // Flexural Capacity Check
-            const As_edge_user = n_edge * ((Math.PI * db_edge**2) / 4);
-            const a_comp = (As_edge_user * fy) / (0.85 * fc * be);
-            const phiMn_edge = 0.9 * As_edge_user * fy * (d_edge - a_comp / 2) / 1e6; // kNm
 
             // Material Summary Calculations
             const vol_slab = L * W * (hs / 1000);
@@ -609,22 +606,22 @@
 
             const steelWeights = { 10: 0.617, 12: 0.888, 16: 1.58, 20: 2.47 };
             
-            // Mesh Steel (Two layers if top mesh required)
+            // Mesh Steel & Spacing (ACI 7.12.2.2 limits)
+            const area_bar = (Math.PI * db**2) / 4;
+            const As_d = Math.max((maxMpos * 1.0) / (0.9 * fy * 0.9 * d), 0.0018 * 1000 * hs);
+            let spacing = (area_bar * 1000) / As_d;
+            // Limit spacing to min(5h, 450mm)
+            spacing = Math.floor(Math.min(450, 5 * hs, Math.max(75, spacing)) / 10) * 10;
+
             const n_layers = topNeeded ? 2 : 1;
             const meshLen = n_layers * ((L * (W / (spacing/1000) + 1)) + (W * (L / (spacing/1000) + 1)));
             const meshKg = meshLen * steelWeights[db];
 
-            // Edge Steel
-            const edgeLen = 2 * (L + W) * n_edge;
-            const edgeKg = edgeLen * steelWeights[db_edge];
-
-            // Tie Steel (assume average hairpin length 3.5m total)
-            const n_cols_w_thrust = columns.filter(c => c.h > 0).length;
-            const tieLen = n_cols_w_thrust * Math.ceil(n_tie_legs/2) * 3.5;
-            const tieKg = tieLen * steelWeights[db_tie];
+            // Tension Development length (Simplified ld)
+            const ld = (fy * db_edge) / (2.1 * Math.sqrt(fc)); 
 
             // Cache for drawing
-            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge, db_tie, n_tie_legs, fy, totalVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, n_edge_req };
+            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge, db_tie, n_tie_legs, fy, totalVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, n_edge_req, ld };
 
             // Update DOM
             renderResults();
@@ -675,9 +672,14 @@
             ctxPlan.fillStyle = '#f8fafc';
             const beS = (r.be/1000)*scale;
             ctxPlan.fillRect(dx+beS, dy+beS, (r.L-2*r.be/1000)*scale, (r.W-2*r.be/1000)*scale);
+            
+            // Edge Beam Visual Boundary
+            ctxPlan.strokeStyle = '#94a3b8'; ctxPlan.lineWidth = 1; ctxPlan.setLineDash([5, 5]);
+            ctxPlan.strokeRect(dx+beS, dy+beS, (r.L-2*r.be/1000)*scale, (r.W-2*r.be/1000)*scale);
+            ctxPlan.setLineDash([]);
+
             ctxPlan.strokeStyle = '#cbd5e1'; ctxPlan.lineWidth = 1;
             ctxPlan.strokeRect(dx, dy, r.L*scale, r.W*scale);
-            ctxPlan.strokeRect(dx+beS, dy+beS, (r.L-2*r.be/1000)*scale, (r.W-2*r.be/1000)*scale);
 
             // Mesh
             if (document.getElementById('showReinf').checked) {
@@ -770,11 +772,27 @@
                     ctxEle.moveTo(sx+eb/2, mid-sh/2 + 10 + offY); 
                     ctxEle.lineTo(sx+eb/2, mid + offY); 
                     ctxEle.lineTo(sx+r.be*1.5*scale-20, mid + offY); 
+                    // Hook at end of hairpin
+                    ctxEle.lineTo(sx+r.be*1.5*scale-20, mid + offY - 15);
                     ctxEle.stroke(); 
                 }
             }
-            ctxEle.strokeStyle = '#2563eb'; ctxEle.lineWidth = 3; ctxEle.beginPath(); ctxEle.moveTo(sx+10, mid+sh/2-8); ctxEle.lineTo(sx+r.be*1.5*scale-10, mid+sh/2-8); ctxEle.stroke();
-            if (r.topNeeded) { ctxEle.strokeStyle = '#ef4444'; ctxEle.beginPath(); ctxEle.moveTo(sx+10, mid-sh/2+8); ctxEle.lineTo(sx+r.be*1.5*scale-10, mid-sh/2+8); ctxEle.stroke(); }
+
+            // Bottom Mesh with hook
+            ctxEle.strokeStyle = '#2563eb'; ctxEle.lineWidth = 3; ctxEle.beginPath(); 
+            ctxEle.moveTo(sx+10, mid+sh/2-18); // hook start
+            ctxEle.lineTo(sx+10, mid+sh/2-8); // vertical
+            ctxEle.lineTo(sx+r.be*1.5*scale-10, mid+sh/2-8); // horizontal
+            ctxEle.stroke();
+
+            // Top Mesh with hook (if enabled)
+            if (r.topNeeded) { 
+                ctxEle.strokeStyle = '#ef4444'; ctxEle.beginPath(); 
+                ctxEle.moveTo(sx+10, mid-sh/2+18); // hook start
+                ctxEle.lineTo(sx+10, mid-sh/2+8); // vertical
+                ctxEle.lineTo(sx+r.be*1.5*scale-10, mid-sh/2+8); // horizontal
+                ctxEle.stroke(); 
+            }
         }
 
         window.onload = () => {
