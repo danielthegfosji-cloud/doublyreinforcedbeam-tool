@@ -560,6 +560,7 @@
             const l = Math.pow((E * Math.pow(hs, 3)) / (12 * (1 - 0.15**2) * (k * 1e-6)), 0.25);
 
             let maxMpos = 0, maxMneg = 0, maxVuP = 0, maxPhiVcP = 0, maxVuOW = 0, maxPhiVcOW = 0, worstCond = "Interior", maxQ = 0, maxAsTie = 0, worstNetH = 0;
+            let worstPunchRatio = 0, worstOWRatio = 0;
 
             columns.forEach(col => {
                 const P_N = col.p * 1500, a = col_c / 2, cond = getColumnCondition(col.x, col.y, L, W, 0.5);
@@ -569,13 +570,27 @@
                 else { Mpos = (P_N * 1.15 / 4) * (Math.log(l/a) + 0.6159); Mneg = 0.05 * P_N; }
                 if (Mpos > maxMpos) maxMpos = Mpos; if (Mneg > maxMneg) maxMneg = Mneg;
 
+                // Punching Shear (Check every column)
                 let b0 = cond === "Interior" ? 4*(col_c+d) : (cond === "Edge" ? 3*col_c+2*d : 2*col_c+d);
                 const phiVcP = phi_s * 0.33 * Math.sqrt(fc) * b0 * d;
-                if (P_N > maxVuP) { maxVuP = P_N; maxPhiVcP = phiVcP; worstCond = cond; }
+                const punchRatio = P_N / phiVcP;
+                if (punchRatio > worstPunchRatio) {
+                    worstPunchRatio = punchRatio;
+                    maxVuP = P_N;
+                    maxPhiVcP = phiVcP;
+                    worstCond = cond;
+                }
 
+                // One-Way Shear (Check every edge/corner column)
                 if (cond !== "Interior") {
                     const phiVcOW = phi_s * 0.17 * Math.sqrt(fc) * be * d_edge;
-                    if (P_N/2 > maxVuOW) { maxVuOW = P_N/2; maxPhiVcOW = phiVcOW; }
+                    const owRatio = (P_N/2) / phiVcOW;
+                    if (owRatio > worstOWRatio) {
+                        worstOWRatio = owRatio;
+                        maxVuOW = P_N/2;
+                        maxPhiVcOW = phiVcOW;
+                    }
+                    
                     const q = col.p / ((be/1000) * ((be + 2*he)/1000));
                     if (q > maxQ) maxQ = q;
                 }
