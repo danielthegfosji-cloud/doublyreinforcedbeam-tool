@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thickened Slab Foundation Design | RC Design Suite</title>
+    <title>Thickened Slab Foundation Design | SimpleCrete</title>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -112,8 +112,13 @@
             color: var(--text-sub);
             font-weight: 600;
         }
+        
+        .hint-label {
+            cursor: help;
+            border-bottom: 1px dotted var(--text-sub);
+        }
 
-        .input-group input {
+        .input-group input, .input-group select {
             width: 100%;
             padding: 0.4rem;
             border: 1px solid var(--border);
@@ -198,8 +203,8 @@
 
         .results-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1rem;
         }
 
         .calc-step {
@@ -245,7 +250,10 @@
             <a href="index.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Suite</a>
             <span class="nav-title"><i class="fa-solid fa-layer-group"></i> Thickened Slab Foundation</span>
         </div>
-        <div style="font-size: 0.8rem; opacity: 0.8;">Westergaard Analysis Engine v1.0</div>
+        <div style="display: flex; align-items: center; gap: 1.5rem;">
+            <a href="https://github.com/danielthegfosji-cloud/reinforcedConcrete" target="_blank" style="color: white; text-decoration: none; font-size: 0.9rem; opacity: 0.8;"><i class="fa-brands fa-github"></i> GitHub</a>
+            <div style="font-size: 0.8rem; opacity: 0.8;">Westergaard & ACI 318-11 v2.2</div>
+        </div>
     </nav>
 
     <div class="container">
@@ -255,38 +263,46 @@
                 <div class="panel-header">Slab Geometry</div>
                 <div class="input-group">
                     <label>Overall Length $L$ ($m$)</label>
-                    <input type="number" id="L_m" value="10" step="0.5">
+                    <input type="number" id="L_m" value="25" step="0.5">
                 </div>
                 <div class="input-group">
                     <label>Overall Width $W$ ($m$)</label>
-                    <input type="number" id="W_m" value="8" step="0.5">
+                    <input type="number" id="W_m" value="20" step="0.5">
                 </div>
                 <div class="input-group">
-                    <label>Slab Thickness $h_s$ ($mm$)</label>
-                    <input type="number" id="hs_mm" value="125" step="5">
+                    <label class="hint-label" title="Slab thickness. Typically 100mm - 200mm.">Slab Thickness $h_s$ ($mm$)</label>
+                    <input type="number" id="hs_mm" value="150" step="5">
                 </div>
             </div>
 
             <div>
                 <div class="panel-header">Thickened Edge</div>
                 <div class="input-group">
-                    <label>Edge Depth $h_e$ ($mm$)</label>
-                    <input type="number" id="he_mm" value="450" step="50">
+                    <label class="hint-label" title="Edge depth. Dictated by frost line or bearing requirements.">Edge Depth $h_e$ ($mm$)</label>
+                    <input type="number" id="he_mm" value="400" step="50">
                 </div>
                 <div class="input-group">
-                    <label>Edge Width $b_e$ ($mm$)</label>
-                    <input type="number" id="be_mm" value="300" step="50">
+                    <label class="hint-label" title="Edge width. Typically 300mm - 600mm.">Edge Width $b_e$ ($mm$)</label>
+                    <input type="number" id="be_mm" value="1200" step="50">
                 </div>
             </div>
 
             <div>
-                <div class="panel-header">Subgrade & Materials</div>
+                <div class="panel-header">Column Properties</div>
                 <div class="input-group">
-                    <label>Reaction $k$ ($kN/m^3$)</label>
+                    <label class="hint-label" title="Column face dimension for punching shear calculation.">Column Size $c$ ($mm$)</label>
+                    <input type="number" id="col_c" value="300" step="50">
+                </div>
+            </div>
+
+            <div>
+                <div class="panel-header">Materials & Steel</div>
+                <div class="input-group">
+                    <label class="hint-label" title="Measures subgrade stiffness. Typical: 15k-30k (clay), 40k-80k (dense sand).">Reaction $k$ ($kN/m^3$)</label>
                     <input type="number" id="k_sub" value="30000" step="5000">
                 </div>
                 <div class="input-group">
-                    <label>Concrete $f'_c$ ($MPa$)</label>
+                    <label class="hint-label" title="Concrete compressive strength. Typical: 20 - 30 MPa.">Concrete $f'_c$ ($MPa$)</label>
                     <input type="number" id="fc" value="25" step="1">
                 </div>
                 <div class="input-group">
@@ -294,13 +310,24 @@
                     <input type="number" id="fy" value="420" step="10">
                 </div>
                 <div class="input-group">
-                    <label>Bar Size ($mm$)</label>
+                    <label>Mesh Bar Size ($mm$)</label>
                     <select id="db_mm">
                         <option value="10">10 mm</option>
                         <option value="12" selected>12 mm</option>
                         <option value="16">16 mm</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Edge Bar Size ($mm$)</label>
+                    <select id="db_edge">
+                        <option value="12" selected>12 mm</option>
+                        <option value="16">16 mm</option>
                         <option value="20">20 mm</option>
                     </select>
+                </div>
+                <div class="input-group">
+                    <label>Edge Bar Count</label>
+                    <input type="number" id="n_edge" value="2" min="0" max="8">
                 </div>
             </div>
 
@@ -318,7 +345,7 @@
                     </div>
                     <div class="input-group">
                         <label>Service Load $P$ ($kN$)</label>
-                        <input type="number" id="colP" value="150" step="10">
+                        <input type="number" id="colP" value="76" step="1">
                     </div>
                     <button class="btn-add" onclick="addColumn()">Add Column</button>
                 </div>
@@ -346,7 +373,11 @@
                     <div id="flexResults"></div>
                 </div>
                 <div class="card">
-                    <div class="panel-header" style="border-bottom-color: var(--text-sub);">Reinforcement Status</div>
+                    <div class="panel-header" style="border-bottom-color: var(--text-sub);">Shear & Integrity</div>
+                    <div id="shearResults"></div>
+                </div>
+                <div class="card">
+                    <div class="panel-header" style="border-bottom-color: var(--text-sub);">Reinforcement Detailing</div>
                     <div id="reinfResults"></div>
                 </div>
             </div>
@@ -354,17 +385,38 @@
     </div>
 
     <script>
-        let columns = [{x: 5, y: 4, p: 150}];
+        let columns = [
+            {x: 0, y: 0, p: 76}, {x: 5, y: 0, p: 76}, {x: 10, y: 0, p: 76}, {x: 15, y: 0, p: 76}, {x: 20, y: 0, p: 76}, {x: 25, y: 0, p: 76},
+            {x: 0, y: 20, p: 76}, {x: 5, y: 20, p: 76}, {x: 10, y: 20, p: 76}, {x: 15, y: 20, p: 76}, {x: 20, y: 20, p: 76}, {x: 25, y: 20, p: 76}
+        ];
         const planCanvas = document.getElementById('planCanvas');
         const eleCanvas = document.getElementById('eleCanvas');
         const ctxPlan = planCanvas.getContext('2d');
         const ctxEle = eleCanvas.getContext('2d');
+
+        function getColumnCondition(x, y, L, W, D_edge = 0.5) {
+            const dx = Math.min(x, L - x);
+            const dy = Math.min(y, W - y);
+            if (dx <= D_edge && dy <= D_edge) return "Corner";
+            if (dx <= D_edge || dy <= D_edge) return "Edge";
+            return "Interior";
+        }
 
         function addColumn() {
             const x = parseFloat(document.getElementById('colX').value);
             const y = parseFloat(document.getElementById('colY').value);
             const p = parseFloat(document.getElementById('colP').value);
             if (isNaN(x) || isNaN(y) || isNaN(p)) return;
+
+            // Check for overlapping columns
+            for (let c of columns) {
+                const dist = Math.sqrt(Math.pow(c.x - x, 2) + Math.pow(c.y - y, 2));
+                if (dist < 0.3) {
+                    alert('Column is too close to an existing column (minimum distance is 0.3m).');
+                    return;
+                }
+            }
+
             columns.push({x, y, p});
             renderColumnList();
             calculate();
@@ -378,12 +430,17 @@
 
         function renderColumnList() {
             const list = document.getElementById('columnList');
-            list.innerHTML = columns.map((c, i) => `
+            const L = parseFloat(document.getElementById('L_m').value) || 25;
+            const W = parseFloat(document.getElementById('W_m').value) || 20;
+            
+            list.innerHTML = columns.map((c, i) => {
+                const cond = getColumnCondition(c.x, c.y, L, W);
+                return `
                 <div class="col-item">
-                    <span>Col ${i+1}: (${c.x}, ${c.y}) - ${c.p}kN</span>
+                    <span>Col ${i+1}: (${c.x}, ${c.y}) - ${c.p}kN <strong style="color:var(--accent)">[${cond}]</strong></span>
                     <button style="color:red; border:none; background:none; cursor:pointer;" onclick="removeColumn(${i})">×</button>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         function calculate() {
@@ -393,101 +450,158 @@
             const hs = parseFloat(document.getElementById('hs_mm').value);
             const he = parseFloat(document.getElementById('he_mm').value);
             const be = parseFloat(document.getElementById('be_mm').value);
+            const col_c = parseFloat(document.getElementById('col_c').value);
             const k = parseFloat(document.getElementById('k_sub').value); // kN/m3
             const fc = parseFloat(document.getElementById('fc').value);
             const fy = parseFloat(document.getElementById('fy').value);
             const db = parseFloat(document.getElementById('db_mm').value);
+            const db_edge = parseFloat(document.getElementById('db_edge').value);
+            const n_edge = parseInt(document.getElementById('n_edge').value);
+
+            renderColumnList();
 
             // 2. Constants
             const E = 4700 * Math.sqrt(fc); // MPa
             const Poisson = 0.15;
+            const phi_shear = 0.75;
+            const d = hs - 40; // Approx effective depth for slab
+            const d_edge = he - 50; // Approx effective depth for edge beam
             
-            // Radius of Relative Stiffness (l) in mm
             const k_Nmm3 = k * 1e-6; 
             const l = Math.pow((E * Math.pow(hs, 3)) / (12 * (1 - Poisson**2) * k_Nmm3), 0.25);
 
-            // 3. Analysis (Westergaard / PCA approx)
+            // 3. Analysis Loop
             let maxMpos = 0;
             let maxMneg = 0;
+            let maxVuPunching = 0;
+            let maxPhiVcPunching = 0;
+            let maxVuOneWay = 0;
+            let maxPhiVcOneWay = 0;
+            let worstPunchingCond = "Interior";
 
             columns.forEach(col => {
                 const P_N = col.p * 1000 * 1.5; // Factored load
+                const a = col_c / 2; 
+                const condition = getColumnCondition(col.x, col.y, L, W, 0.5);
                 
-                // Radius of loading area 'a' (assume 150mm for typical column/base)
-                const a = 150; 
-                // Westergaard Interior Positive Moment (Nmm/mm width)
-                const Mpos = (P_N * (1 + Poisson) / 4) * (Math.log(l / a) + 0.6159);
-                
-                // Approx Negative Moment (peak approx 0.03 to 0.05 * P)
-                const Mneg = 0.05 * P_N; 
+                // Moments
+                let Mpos = 0, Mneg = 0;
+                if (condition === "Corner") {
+                    Mneg = (P_N / 2) * (1 - Math.pow( (a * 1.414) / l, 0.6));
+                    Mpos = 0.2 * Mneg;
+                } else if (condition === "Edge") {
+                    Mpos = (P_N * (1 + Poisson) / 4) * (Math.log(l / a) + 0.43); 
+                    Mneg = 0.06 * P_N;
+                } else {
+                    Mpos = (P_N * (1 + Poisson) / 4) * (Math.log(l / a) + 0.6159);
+                    Mneg = 0.05 * P_N; 
+                }
 
                 if (Mpos > maxMpos) maxMpos = Mpos;
                 if (Mneg > maxMneg) maxMneg = Mneg;
+
+                // Punching Shear
+                let b0 = 0;
+                if (condition === "Interior") b0 = 4 * (col_c + d);
+                else if (condition === "Edge") b0 = 3 * col_c + 2 * d;
+                else b0 = 2 * col_c + d;
+
+                const VuPunching = P_N;
+                const phiVcPunching = phi_shear * 0.33 * Math.sqrt(fc) * b0 * d;
+
+                if (VuPunching > maxVuPunching) {
+                    maxVuPunching = VuPunching;
+                    maxPhiVcPunching = phiVcPunching;
+                    worstPunchingCond = condition;
+                }
+
+                // One-Way Shear (if near edge)
+                if (condition !== "Interior") {
+                    const VuOneWay = P_N / 2; // Simplified: Half load to edge beam
+                    const phiVcOneWay = phi_shear * 0.17 * Math.sqrt(fc) * be * d_edge;
+                    if (VuOneWay > maxVuOneWay) {
+                        maxVuOneWay = VuOneWay;
+                        maxPhiVcOneWay = phiVcOneWay;
+                    }
+                }
             });
 
-            // Cracking Moment (Nmm/mm)
-            const fr = 0.62 * Math.sqrt(fc); // MPa
-            const S = (1000 * Math.pow(hs, 2)) / 6; // Section Modulus per 1000mm width -> mm3
-            const Mcr = (fr * S) / 1000; // Nmm per mm width
-
+            // Cracking Moment
+            const fr = 0.62 * Math.sqrt(fc);
+            const S = (1000 * Math.pow(hs, 2)) / 6; 
+            const Mcr = (fr * S) / 1000; 
             const topBarNeeded = Math.abs(maxMneg) > Mcr;
 
             // 4. Render Results
             renderFlexResults(l, maxMpos, maxMneg, Mcr);
-            renderReinfResults(topBarNeeded, hs, maxMpos, fy, db);
+            renderShearResults(maxVuPunching, maxPhiVcPunching, worstPunchingCond, maxVuOneWay, maxPhiVcOneWay);
+            renderReinfResults(topBarNeeded, hs, maxMpos, fy, db, db_edge, n_edge);
             drawPlan(L, W, l, columns);
-            drawElevation(hs, he, be, topBarNeeded);
+            drawElevation(hs, he, be, topBarNeeded, n_edge, db_edge);
         }
 
         function renderFlexResults(l, Mpos, Mneg, Mcr) {
             const div = document.getElementById('flexResults');
             div.innerHTML = `
-                <div class="calc-step">
-                    <b>Radius of Stiffness ($l$):</b> ${l.toFixed(1)} mm
-                    <p style="font-size:0.75rem; color:var(--text-sub);">Measure of slab rigidity relative to subgrade.</p>
-                </div>
-                <div class="calc-step">
-                    <b>Max Pos Moment ($M_u^+$):</b> ${(Mpos/1000).toFixed(2)} kNm/m
-                </div>
-                <div class="calc-step">
-                    <b>Max Neg Moment ($|M_u^-|$):</b> ${(Mneg/1000).toFixed(2)} kNm/m
-                </div>
-                <div class="calc-step">
-                    <b>Cracking Moment ($M_{cr}$):</b> ${(Mcr/1000).toFixed(2)} kNm/m
-                </div>
+                <div class="calc-step"><b>Rad. of Stiffness ($l$):</b> ${l.toFixed(1)} mm</div>
+                <div class="calc-step"><b>Max $M_u^+$:</b> ${(Mpos/1000).toFixed(2)} kNm/m</div>
+                <div class="calc-step"><b>Max $|M_u^-|$:</b> ${(Mneg/1000).toFixed(2)} kNm/m</div>
+                <div class="calc-step"><b>Cracking $M_{cr}$:</b> ${(Mcr/1000).toFixed(2)} kNm/m</div>
             `;
             if (window.MathJax) MathJax.typesetPromise();
         }
 
-        function renderReinfResults(topNeeded, hs, Mpos, fy, db) {
-            const div = document.getElementById('reinfResults');
-            const status = topNeeded ? 
-                `<span class="status-badge status-danger">Top Steel Required</span>` : 
-                `<span class="status-badge status-success">Bottom Only OK</span>`;
+        function renderShearResults(VuP, phiVcP, cond, VuOW, phiVcOW) {
+            const div = document.getElementById('shearResults');
+            const ratioP = (VuP / phiVcP);
+            const ratioOW = VuOW > 0 ? (VuOW / phiVcOW) : 0;
             
+            const status = (ratioP < 1.0 && ratioOW < 1.0) ? 
+                `<span class="status-badge status-success">Shear OK</span>` : 
+                `<span class="status-badge status-danger">Shear Failure</span>`;
+            
+            div.innerHTML = `
+                <div style="margin-bottom: 1rem;">${status}</div>
+                <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">PUNCHING (Worst Case: ${cond})</div>
+                <table class="result-table" style="margin-bottom: 10px;">
+                    <tr><td>$V_u$</td><td>${(VuP/1000).toFixed(1)} kN</td></tr>
+                    <tr><td>$\phi V_c$</td><td>${(phiVcP/1000).toFixed(1)} kN</td></tr>
+                    <tr><td>Ratio</td><td><strong>${(ratioP*100).toFixed(1)}%</strong></td></tr>
+                </table>
+                <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">ONE-WAY (Edge Beam)</div>
+                <table class="result-table">
+                    <tr><td>$V_u$</td><td>${(VuOW/1000).toFixed(1)} kN</td></tr>
+                    <tr><td>$\phi V_c$</td><td>${(phiVcOW/1000).toFixed(1)} kN</td></tr>
+                    <tr><td>Ratio</td><td><strong>${(ratioOW*100).toFixed(1)}%</strong></td></tr>
+                </table>
+            `;
+            if (window.MathJax) MathJax.typesetPromise();
+        }
+
+        function renderReinfResults(topNeeded, hs, Mpos, fy, db, db_edge, n_edge) {
+            const div = document.getElementById('reinfResults');
             const area_bar = (Math.PI * Math.pow(db, 2)) / 4;
             const d = hs - 40; 
-            const As_flex = (Mpos * 1.0) / (0.9 * fy * 0.9 * d); // Simplified As approx
+            const As_flex = (Mpos * 1.0) / (0.9 * fy * 0.9 * d);
             const As_min = 0.0018 * 1000 * hs;
             const As_design = Math.max(As_flex, As_min);
 
-            // Calculate Spacing
             let spacing = (area_bar * 1000) / As_design;
             spacing = Math.floor(Math.min(450, Math.max(75, spacing)) / 10) * 10;
 
             div.innerHTML = `
-                <div style="margin-bottom: 1rem;">${status}</div>
                 <table class="result-table">
+                    <tr><td colspan="2" style="color:var(--accent); font-weight:700;">Slab Mesh (Bottom)</td></tr>
                     <tr><td>Bar Size</td><td>${db} mm</td></tr>
-                    <tr><td>Calculated Spacing</td><td><strong>@ ${spacing} mm c/c</strong></td></tr>
-                    <tr><td>Top Mesh Needed?</td><td>${topNeeded ? '<span style="color:var(--danger)">YES</span>' : 'NO'}</td></tr>
-                    <tr><td>Min. Area ($A_s$)</td><td>${(As_min).toFixed(0)} mm²/m</td></tr>
-                    <tr><td>Flexure Area ($A_s$)</td><td>${(As_flex).toFixed(0)} mm²/m</td></tr>
+                    <tr><td>Spacing</td><td><strong>@ ${spacing} mm c/c</strong></td></tr>
+                    
+                    <tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Edge Detailing</td></tr>
+                    <tr><td>Longitudinal</td><td>${n_edge} - ${db_edge} mm bars</td></tr>
+                    <tr><td>Top Mesh?</td><td>${topNeeded ? '<span style="color:var(--danger)">YES</span>' : 'NO'}</td></tr>
+                    
+                    <tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Anchorage</td></tr>
+                    <tr><td>Min Lap ($l_d$)</td><td>${(40 * db_edge).toFixed(0)} mm</td></tr>
                 </table>
-                <p style="font-size: 0.75rem; color: var(--text-sub); margin-top: 12px; line-height:1.4;">
-                    Recommendation: Provide a single bottom layer of reinforcing (mesh or bars) for standard loads. 
-                    Add a top layer near concentrated loads if $|M_u^-| > M_{cr}$.
-                </p>
             `;
         }
 
@@ -495,57 +609,28 @@
             const isHorizontal = Math.abs(y1 - y2) < 2;
             const dash = [5, 5];
             ctx.save();
-            ctx.strokeStyle = '#94a3b8';
-            ctx.fillStyle = '#64748b';
-            ctx.lineWidth = 1;
-            ctx.font = '11px Inter';
-            ctx.textAlign = 'center';
-
-            // Extension lines
+            ctx.strokeStyle = '#94a3b8'; ctx.fillStyle = '#64748b'; ctx.lineWidth = 1;
+            ctx.font = '11px Inter'; ctx.textAlign = 'center';
             ctx.setLineDash(dash);
             ctx.beginPath();
-            if (isHorizontal) {
-                ctx.moveTo(x1, y1); ctx.lineTo(x1, y1 + offset);
-                ctx.moveTo(x2, y1); ctx.lineTo(x2, y1 + offset);
-            } else {
-                ctx.moveTo(x1, y1); ctx.lineTo(x1 + offset, y1);
-                ctx.moveTo(x1, y2); ctx.lineTo(x1 + offset, y2);
-            }
+            if (isHorizontal) { ctx.moveTo(x1, y1); ctx.lineTo(x1, y1 + offset); ctx.moveTo(x2, y1); ctx.lineTo(x2, y1 + offset); }
+            else { ctx.moveTo(x1, y1); ctx.lineTo(x1 + offset, y1); ctx.moveTo(x1, y2); ctx.lineTo(x1 + offset, y2); }
             ctx.stroke();
-
-            // Dimension line
-            ctx.setLineDash([]);
-            ctx.beginPath();
+            ctx.setLineDash([]); ctx.beginPath();
             const dimY = isHorizontal ? y1 + offset * 0.8 : 0;
             const dimX = isHorizontal ? 0 : x1 + offset * 0.8;
-            
             if (isHorizontal) {
                 ctx.moveTo(x1, dimY); ctx.lineTo(x2, dimY);
-                // Arrow heads
-                ctx.moveTo(x1, dimY); ctx.lineTo(x1 + 5, dimY - 3);
-                ctx.moveTo(x1, dimY); ctx.lineTo(x1 + 5, dimY + 3);
-                ctx.moveTo(x2, dimY); ctx.lineTo(x2 - 5, dimY - 3);
-                ctx.moveTo(x2, dimY); ctx.lineTo(x2 - 5, dimY + 3);
+                ctx.moveTo(x1, dimY); ctx.lineTo(x1 + 5, dimY - 3); ctx.moveTo(x1, dimY); ctx.lineTo(x1 + 5, dimY + 3);
+                ctx.moveTo(x2, dimY); ctx.lineTo(x2 - 5, dimY - 3); ctx.moveTo(x2, dimY); ctx.lineTo(x2 - 5, dimY + 3);
             } else {
                 ctx.moveTo(dimX, y1); ctx.lineTo(dimX, y2);
-                // Arrow heads
-                ctx.moveTo(dimX, y1); ctx.lineTo(dimX - 3, y1 + 5);
-                ctx.moveTo(dimX, y1); ctx.lineTo(dimX + 3, y1 + 5);
-                ctx.moveTo(dimX, y2); ctx.lineTo(dimX - 3, y2 - 5);
-                ctx.moveTo(dimX, y2); ctx.lineTo(dimX + 3, y2 - 5);
+                ctx.moveTo(dimX, y1); ctx.lineTo(dimX - 3, y1 + 5); ctx.moveTo(dimX, y1); ctx.lineTo(dimX + 3, y1 + 5);
+                ctx.moveTo(dimX, y2); ctx.lineTo(dimX - 3, y2 - 5); ctx.moveTo(dimX, y2); ctx.lineTo(dimX + 3, y2 - 5);
             }
             ctx.stroke();
-
-            // Text
-            if (isHorizontal) {
-                ctx.fillText(text, (x1 + x2) / 2, dimY - 5);
-            } else {
-                ctx.save();
-                ctx.translate(dimX - 5, (y1 + y2) / 2);
-                ctx.rotate(-Math.PI / 2);
-                ctx.fillText(text, 0, 0);
-                ctx.restore();
-            }
+            if (isHorizontal) ctx.fillText(text, (x1 + x2) / 2, dimY - 5);
+            else { ctx.save(); ctx.translate(dimX - 5, (y1 + y2) / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(text, 0, 0); ctx.restore(); }
             ctx.restore();
         }
 
@@ -555,115 +640,73 @@
             const cw = planCanvas.width;
             const ch = planCanvas.height;
             ctxPlan.clearRect(0,0,cw,ch);
-
             const padding = 60;
             const scale = Math.min((cw - padding * 2)/L, (ch - padding * 2)/W);
             const dx = (cw - L*scale)/2;
             const dy = (ch - W*scale)/2;
-
-            // Slab
-            ctxPlan.fillStyle = '#f8fafc';
-            ctxPlan.fillRect(dx, dy, L*scale, W*scale);
-            ctxPlan.strokeStyle = '#cbd5e1';
-            ctxPlan.lineWidth = 1;
-            ctxPlan.strokeRect(dx, dy, L*scale, W*scale);
-
-            // Columns and influence areas
+            ctxPlan.fillStyle = '#f8fafc'; ctxPlan.fillRect(dx, dy, L*scale, W*scale);
+            ctxPlan.strokeStyle = '#cbd5e1'; ctxPlan.lineWidth = 1; ctxPlan.strokeRect(dx, dy, L*scale, W*scale);
             cols.forEach(c => {
                 const px = dx + c.x * scale;
                 const py = dy + c.y * scale;
-
-                // Influence radius (l)
-                ctxPlan.beginPath();
-                ctxPlan.arc(px, py, l*scale/1000, 0, Math.PI*2);
-                ctxPlan.fillStyle = 'rgba(37, 99, 235, 0.05)';
-                ctxPlan.fill();
-                ctxPlan.strokeStyle = 'rgba(37, 99, 235, 0.2)';
-                ctxPlan.stroke();
-
-                // Column dot
-                ctxPlan.beginPath();
-                ctxPlan.arc(px, py, 6, 0, Math.PI*2);
-                ctxPlan.fillStyle = '#0f172a';
-                ctxPlan.fill();
+                ctxPlan.beginPath(); ctxPlan.arc(px, py, l*scale/1000, 0, Math.PI*2);
+                ctxPlan.fillStyle = 'rgba(37, 99, 235, 0.05)'; ctxPlan.fill();
+                ctxPlan.strokeStyle = 'rgba(37, 99, 235, 0.2)'; ctxPlan.stroke();
+                ctxPlan.beginPath(); ctxPlan.arc(px, py, 6, 0, Math.PI*2);
+                ctxPlan.fillStyle = '#0f172a'; ctxPlan.fill();
             });
-
-            // Dimensions
             drawDimensionLine(ctxPlan, dx, dy, dx + L*scale, dy, `${L}m`, -30);
             drawDimensionLine(ctxPlan, dx, dy, dx, dy + W*scale, `${W}m`, -30);
         }
 
-        function drawElevation(hs, he, be, topNeeded) {
+        function drawElevation(hs, he, be, topNeeded, n_edge, db_edge) {
             eleCanvas.width = eleCanvas.offsetWidth;
             eleCanvas.height = eleCanvas.offsetHeight;
             const cw = eleCanvas.width;
             const ch = eleCanvas.height;
             ctxEle.clearRect(0,0,cw,ch);
-
-            // Dynamic Scaling based on max(he, be)
             const margin = 50;
-            const totalWidth_mm = be * 3; // Show some slab alongside thickening
-            const totalHeight_mm = he * 1.5;
-            
+            const totalWidth_mm = be * 1.5;
+            const totalHeight_mm = he * 1.2;
             const scale = Math.min((cw - margin * 2) / totalWidth_mm, (ch - margin * 2) / totalHeight_mm);
-            
             const middle = ch / 2 - (he * scale) / 4;
             const startX = (cw - totalWidth_mm * scale) / 2;
-
-            ctxEle.fillStyle = '#f1f5f9';
-            ctxEle.strokeStyle = '#475569';
-            ctxEle.lineWidth = 2;
-
+            ctxEle.fillStyle = '#f1f5f9'; ctxEle.strokeStyle = '#475569'; ctxEle.lineWidth = 2;
             const slabH = hs * scale;
             const edgeH = he * scale;
             const edgeB = be * scale;
-            
-            // X-Coordinates
             const x0 = startX;
             const x1 = x0 + edgeB;
-            const x2 = x1 + edgeB; // Splay/transition width (assume equal to be for visual)
+            const x2 = x1 + edgeB/2;
             const x3 = x0 + totalWidth_mm * scale;
-
             ctxEle.beginPath();
-            ctxEle.moveTo(x0, middle - slabH/2); // Top left
-            ctxEle.lineTo(x3, middle - slabH/2); // Top right
-            ctxEle.lineTo(x3, middle + slabH/2); // Bot right (slab)
-            ctxEle.lineTo(x2, middle + slabH/2); // Transition point
-            ctxEle.lineTo(x1, middle + edgeH - slabH/2); // Base of thickening
-            ctxEle.lineTo(x0, middle + edgeH - slabH/2); // Deep end
-            ctxEle.closePath();
-            ctxEle.fill();
-            ctxEle.stroke();
-
-            // Reinforcement
+            ctxEle.moveTo(x0, middle - slabH/2); ctxEle.lineTo(x3, middle - slabH/2);
+            ctxEle.lineTo(x3, middle + slabH/2); ctxEle.lineTo(x2, middle + slabH/2);
+            ctxEle.lineTo(x1, middle + edgeH - slabH/2); ctxEle.lineTo(x0, middle + edgeH - slabH/2);
+            ctxEle.closePath(); ctxEle.fill(); ctxEle.stroke();
+            // Bars
             ctxEle.lineWidth = 3;
-            // Bottom
             ctxEle.strokeStyle = '#2563eb';
-            ctxEle.beginPath();
-            ctxEle.moveTo(x0 + 10, middle + slabH/2 - 8);
-            ctxEle.lineTo(x3 - 10, middle + slabH/2 - 8);
-            ctxEle.stroke();
-
+            ctxEle.beginPath(); ctxEle.moveTo(x0 + 10, middle + slabH/2 - 8); ctxEle.lineTo(x3 - 10, middle + slabH/2 - 8); ctxEle.stroke();
+            // Edge Longitudinal Bars
+            ctxEle.fillStyle = '#2563eb';
+            for(let i=0; i<n_edge; i++) {
+                ctxEle.beginPath();
+                ctxEle.arc(x0 + 25 + i*20, middle + edgeH - slabH/2 - 25, 4, 0, Math.PI*2);
+                ctxEle.fill();
+            }
             if (topNeeded) {
                 ctxEle.strokeStyle = '#ef4444';
-                ctxEle.beginPath();
-                ctxEle.moveTo(x0 + 10, middle - slabH/2 + 8);
-                ctxEle.lineTo(x3 - 10, middle - slabH/2 + 8);
-                ctxEle.stroke();
+                ctxEle.beginPath(); ctxEle.moveTo(x0 + 10, middle - slabH/2 + 8); ctxEle.lineTo(x3 - 10, middle - slabH/2 + 8); ctxEle.stroke();
             }
-
-            // Dimensions
             drawDimensionLine(ctxEle, x3 + 10, middle - slabH/2, x3 + 10, middle + slabH/2, `${hs}mm`, 10);
             drawDimensionLine(ctxEle, x0 - 10, middle - slabH/2, x0 - 10, middle + edgeH - slabH/2, `${he}mm`, -10);
             drawDimensionLine(ctxEle, x0, middle + edgeH - slabH/2 + 10, x1, middle + edgeH - slabH/2 + 10, `${be}mm`, 10);
         }
 
-        // Attach listeners to all inputs for real-time update
         window.onload = () => {
             const inputs = document.querySelectorAll('input, select');
-            inputs.forEach(input => {
-                input.addEventListener('input', calculate);
-            });
+            inputs.forEach(input => input.addEventListener('input', calculate));
             renderColumnList();
             calculate();
         };

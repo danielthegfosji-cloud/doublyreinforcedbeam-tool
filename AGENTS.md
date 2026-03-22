@@ -1,4 +1,4 @@
-# RC Design Suite - Agent Guidelines
+# SimpleCrete Suite - Agent Guidelines
 
 ## Project Overview
 

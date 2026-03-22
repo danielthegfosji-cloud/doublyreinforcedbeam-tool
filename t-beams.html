@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RC Design Suite | T-Beam Calculator</title>
+    <title>SimpleCrete | T-Beam Calculator</title>
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -275,6 +275,14 @@
             </div>
 
             <button type="button" class="calc-btn" onclick="calculate()">Calculate</button>
+            <div style="display: flex; gap: 10px; margin-top: 0.5rem;">
+                <button type="button" class="calc-btn" onclick="runUnitTestEx51()" style="flex: 1; background-color: var(--text-muted); margin-top: 0; font-size: 0.8rem;">
+                    <i class="fa-solid fa-vial"></i> Test (Ex 5.1)
+                </button>
+                <button type="button" class="calc-btn" onclick="runUnitTestEx54()" style="flex: 1; background-color: var(--text-muted); margin-top: 0; font-size: 0.8rem;">
+                    <i class="fa-solid fa-vial"></i> Test (Ex 5.4)
+                </button>
+            </div>
             </form>
         </div>
     </nav>
@@ -290,6 +298,18 @@
             <div style="padding: 10px; background: #1e293b; color: white; font-size: 0.8rem; text-align: center;">
                 <i class="fa-solid fa-mouse"></i> Left Click: Rotate | Scroll: Zoom | Right Click: Pan
             </div>
+        </div>
+    </div>
+
+    <!-- Test Result Modal -->
+    <div id="testModal" class="modal">
+        <div class="modal-content" style="width: 400px;">
+            <div class="modal-header">
+                <h3 id="testTitle" style="margin:0;">Unit Test Result</h3>
+                <button onclick="closeTestModal()" class="close-btn">&times;</button>
+            </div>
+            <div id="testBody" style="padding: 1rem 0; line-height: 1.6;"></div>
+            <button onclick="closeTestModal()" class="btn-calc" style="margin-top: 1rem; background-color: var(--primary);">Close</button>
         </div>
     </div>
 
@@ -590,6 +610,64 @@
         
         MathJax.typesetPromise();
         drawBeam(svgData);
+
+        return { Mn, phiMn: phi * Mn / 1e6, epsilon_t, a: a_calc, numBars };
+    }
+
+    // --- UNIT TESTS ---
+    function openTestModal(title, body) {
+        document.getElementById('testTitle').innerText = title;
+        document.getElementById('testBody').innerHTML = body;
+        document.getElementById('testModal').style.display = 'flex';
+    }
+
+    function closeTestModal() {
+        document.getElementById('testModal').style.display = 'none';
+    }
+
+    function runUnitTestEx51() {
+        // Example 5.1: Analysis
+        switchTab('analysis');
+        document.getElementById('fc').value = 27.6;
+        document.getElementById('fy').value = 413.7;
+        document.getElementById('beff').value = 1524;
+        document.getElementById('hf').value = 101.6;
+        document.getElementById('bw').value = 254;
+        document.getElementById('h').value = 685.8;
+        document.getElementById('cover').value = 38.1;
+        document.getElementById('nbars').value = 8;
+        document.getElementById('analysisBarSize').value = 25;
+        
+        const res = calculate();
+        const expected = 846.3; 
+        const error = Math.abs((res.phiMn - expected) / expected) * 100;
+        if (error < 5.0) {
+            openTestModal("✅ Analysis Test Passed", `Expected: ~${expected} kN-m.<br>Calculated: ${res.phiMn.toFixed(1)} kN-m.<br>Error: ${error.toFixed(2)}%`);
+        } else {
+            openTestModal("❌ Analysis Test Failed", `Expected: ~${expected} kN-m.<br>Calculated: ${res.phiMn.toFixed(1)} kN-m.`);
+        }
+    }
+
+    function runUnitTestEx54() {
+        // Example 5.4: Design
+        switchTab('design');
+        document.getElementById('fc').value = 27.6;
+        document.getElementById('fy').value = 413.7;
+        document.getElementById('beff').value = 1524; // 60in
+        document.getElementById('hf').value = 101.6; // 4in
+        document.getElementById('bw').value = 304.8; // 12in
+        document.getElementById('h').value = 533.4; // 21in approx for d=18in
+        document.getElementById('cover').value = 38.1;
+        document.getElementById('Mu').value = 347; // 256 ft-k
+        document.getElementById('designBarSize').value = 25;
+        
+        const res = calculate();
+        // Expected: As = 3.25 in2 (approx 2097 mm2) -> ~5 bars phi25
+        if (res.numBars >= 4 && res.numBars <= 6) {
+            openTestModal("✅ Design Test Passed", `Example 5.4 Design.<br>Expected: ~5 bars ϕ25.<br>Calculated: ${res.numBars} bars.<br><br>Reinforcement selection is within acceptable conversion range.`);
+        } else {
+            openTestModal("❌ Design Test Failed", `Calculated: ${res.numBars} bars.<br>Expected: ~5 bars.`);
+        }
     }
 
     // --- VISUALIZATION ENGINE ---

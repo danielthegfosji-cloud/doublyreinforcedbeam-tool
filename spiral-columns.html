@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spiral Column Design | SimpleCrete</title>
+    <!-- External Libraries -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']]
+      }
+    };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        .viz-container {
+            background-color: var(--panel-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: 2rem;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+        canvas { background-color: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; }
+        .status-box { padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; font-weight: 600; }
+        .status-success { background-color: #d1fae5; color: #065f46; border: 1px solid #10b981; }
+        .status-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #ef4444; }
+        .math-block { margin: 1rem 0; padding: 1rem; background-color: #f8fafc; border-radius: 8px; border-left: 4px solid var(--accent); }
+    </style>
+</head>
+<body>
+
+    <nav class="sidebar">
+        <a href="index.html" class="back-btn">
+            <i class="fa-solid fa-arrow-left"></i> Dashboard
+        </a>
+
+        <div class="input-panel">
+            <h2 class="panel-title">Spiral Column (SI)</h2>
+            
+            <div class="section-header">Materials</div>
+            <div class="form-row">
+                <div class="form-col">
+                    <label>Concrete $f'_c$ (MPa)</label>
+                    <input type="number" id="fc" value="28">
+                </div>
+                <div class="form-col">
+                    <label>Steel $f_y$ (MPa)</label>
+                    <input type="number" id="fy" value="420">
+                </div>
+            </div>
+
+            <div class="section-header">Geometry</div>
+            <div class="form-row">
+                <div class="form-col">
+                    <label>Diameter $D$ (mm)</label>
+                    <input type="number" id="diam" value="400" min="200" step="10">
+                </div>
+                <div class="form-col">
+                    <label>Cover (mm)</label>
+                    <input type="number" id="cover" value="40">
+                </div>
+            </div>
+
+            <div class="section-header">Reinforcement</div>
+            <div class="form-row">
+                <div class="form-col">
+                    <label>Bar Size (mm)</label>
+                    <select id="barSize">
+                        <option value="16">16 mm</option>
+                        <option value="20">20 mm</option>
+                        <option value="25" selected>25 mm</option>
+                        <option value="28">28 mm</option>
+                        <option value="32">32 mm</option>
+                        <option value="36">36 mm</option>
+                    </select>
+                </div>
+                <div class="form-col">
+                    <label>Total Bars</label>
+                    <input type="number" id="nbars" value="6" min="6" step="1">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-col">
+                    <label>Spiral Size (mm)</label>
+                    <select id="spiralSize">
+                        <option value="10" selected>10 mm</option>
+                        <option value="12">12 mm</option>
+                    </select>
+                </div>
+                <div class="form-col">
+                    <label>Pitch $s$ (mm)</label>
+                    <input type="number" id="pitch" value="50" min="25" max="75">
+                </div>
+            </div>
+
+            <div class="section-header">Applied Loads</div>
+            <div class="form-group">
+                <label>Axial $P_u$ (kN)</label>
+                <input type="number" id="Pu" value="1000">
+            </div>
+            <div class="form-row">
+                <div class="form-col">
+                    <label>$M_{ux}$ (kN-m)</label>
+                    <input type="number" id="Mux" value="50">
+                </div>
+                <div class="form-col">
+                    <label>$M_{uy}$ (kN-m)</label>
+                    <input type="number" id="Muy" value="0">
+                </div>
+            </div>
+
+            <button class="calc-btn" onclick="calculate()">Analyze Spiral Column</button>
+            <button class="calc-btn" onclick="runUnitTest()" style="background-color: var(--text-muted); margin-top: 0.5rem;">
+                <i class="fa-solid fa-vial"></i> Run Textbook Test (Ex 10.5)
+            </button>
+        </div>
+    </nav>
+
+    <main class="results-panel">
+        <div class="hero">
+            <h1>Spiral Column Design</h1>
+            <p>Analyze circular reinforced concrete columns with spiral reinforcement. Handles biaxial bending via vector sum due to polar symmetry.</p>
+        </div>
+
+        <div class="viz-container">
+            <div>
+                <h4>Section Detail</h4>
+                <canvas id="sectionCanvas" width="300" height="300"></canvas>
+            </div>
+            <div style="flex: 1; min-width: 300px;">
+                <h4>Interaction Diagram</h4>
+                <div style="height: 300px;">
+                    <canvas id="interactionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">Analysis Report</h3>
+            <div id="capacityCheckResult"></div>
+            <div id="sanityCheckOutput"></div>
+            <div class="math-block" id="calcOutput"></div>
+            <div id="reinforcementSchedule"></div>
+        </div>
+    </main>
+
+    <script>
+        let myChart = null;
+
+        const inputs = document.querySelectorAll('input, select');
+        inputs.forEach(input => {
+            input.addEventListener('input', calculate);
+            input.addEventListener('change', calculate);
+        });
+
+        window.onload = calculate;
+
+        function calculate() {
+            const fc = parseFloat(document.getElementById('fc').value);
+            const fy = parseFloat(document.getElementById('fy').value);
+            const D = parseFloat(document.getElementById('diam').value);
+            const cover = parseFloat(document.getElementById('cover').value);
+            const barDia = parseFloat(document.getElementById('barSize').value);
+            const nbars = parseInt(document.getElementById('nbars').value);
+            const ds = parseFloat(document.getElementById('spiralSize').value);
+            const pitch = parseFloat(document.getElementById('pitch').value);
+            const Pu = parseFloat(document.getElementById('Pu').value) * 1000;
+            const Mux = parseFloat(document.getElementById('Mux').value) * 1e6;
+            const Muy = parseFloat(document.getElementById('Muy').value) * 1e6;
+
+            // Biaxial vector sum (Section 10.8)
+            const Mu = Math.sqrt(Mux**2 + Muy**2);
+
+            const Ag = Math.PI * D**2 / 4;
+            const Ast = nbars * Math.PI * barDia**2 / 4;
+            const rho = Ast / Ag;
+
+            // Spiral Reinforcement Ratio (Section 9.5)
+            const Dc = D - 2 * cover;
+            const Ac = Math.PI * Dc**2 / 4;
+            const rho_s_provided = (4 * (Math.PI * ds**2 / 4)) / (Dc * pitch);
+            const rho_s_required = 0.45 * (Ag / Ac - 1) * (fc / fy);
+
+            // Capacity Curve (Simplified Whitney approach for circular - Section 10.3)
+            const points = generateInteraction(fc, fy, D, cover, barDia, nbars, 0.75); // phi=0.75 for spiral
+
+            // P0 and Pn_max (Section 10.5c)
+            const P0 = 0.85 * fc * (Ag - Ast) + fy * Ast;
+            const PhiPn_max = 0.75 * 0.85 * P0; // Spiral limit
+
+            // Capacity Check
+            const Mu_kNm = Mu / 1e6;
+            const Pu_kN = Pu / 1000;
+            let Mcap = 0;
+            for(let i=0; i<points.length-1; i++) {
+                const p1 = points[i], p2 = points[i+1];
+                if((p1.y <= Pu_kN && p2.y >= Pu_kN) || (p1.y >= Pu_kN && p2.y <= Pu_kN)) {
+                    if(Math.abs(p1.y - p2.y) > 0.1) Mcap = p1.x + (p2.x - p1.x) * (Pu_kN - p1.y) / (p2.y - p1.y);
+                    else Mcap = Math.max(p1.x, p2.x);
+                    break;
+                }
+            }
+
+            const isSafe = (Pu <= PhiPn_max && Mu_kNm <= Mcap + 0.1);
+            document.getElementById('capacityCheckResult').innerHTML = `
+                <div class="status-box ${isSafe ? 'status-success' : 'status-danger'}">
+                    <i class="fa-solid ${isSafe ? 'fa-check-circle' : 'fa-circle-xmark'}"></i>
+                    <strong>${isSafe ? 'Safe' : 'Unsafe'}:</strong> Biaxial Capacity Verified. Mu = ${Mu_kNm.toFixed(1)} kNm, Cap ≈ ${Mcap.toFixed(1)} kNm.
+                </div>
+            `;
+
+            let rhoLog = `<div class="status-badge ${rho >= 0.01 && rho <= 0.08 ? 'status-success' : 'status-danger'}">$\\rho_g = ${(rho*100).toFixed(2)}\\%$</div>`;
+            let spiralLog = `<div class="status-badge ${rho_s_provided >= rho_s_required ? 'status-success' : 'status-danger'}">Spiral: ${rho_s_provided >= rho_s_required ? 'OK' : 'Increase Pitch/Size'}</div>`;
+            document.getElementById('sanityCheckOutput').innerHTML = rhoLog + " " + spiralLog;
+
+            document.getElementById('calcOutput').innerHTML = `
+                $$ P_0 = 0.85 f'_c (A_g - A_{st}) + f_y A_{st} = ${(P0/1000).toFixed(0)} \\text{ kN} $$
+                $$ \\phi P_{n,max} = 0.85(0.75) P_0 = ${(PhiPn_max/1000).toFixed(0)} \\text{ kN} $$
+                $$ \\rho_s = \\frac{4 A_{sp}}{D_c s} = ${rho_s_provided.toFixed(4)} \\text{ (Req: ${rho_s_required.toFixed(4)})} $$
+            `;
+            if(window.MathJax) MathJax.typesetPromise();
+
+            drawSection(D, cover, barDia, nbars, ds);
+            updateChart(points, {x: Mu_kNm, y: Pu_kN}, PhiPn_max/1000);
+        }
+
+        function generateInteraction(fc, fy, D, cover, barDia, nbars, phiSpiral) {
+            const points = [];
+            const R = D / 2;
+            const dr = R - cover - 10 - barDia / 2; // radius of bar circle
+            const Ag = Math.PI * R**2;
+            const Es = 200000;
+            const beta1 = fc <= 28 ? 0.85 : Math.max(0.65, 0.85 - 0.05 * (fc-28)/7);
+
+            // Iterate c from 0.1 to D*2
+            let c_steps = [0.1, D/4, D/2, D, D*1.5, 9999];
+            for(let i=1; i<100; i++) c_steps.push(D * i/100);
+            c_steps.sort((a,b) => a-b);
+
+            c_steps.forEach(c => {
+                const a = Math.min(D, beta1 * c);
+                
+                // Concrete force (circular segment integration)
+                // dist from center to the chord: d_chord = R - a
+                const d_chord = R - a;
+                const theta = 2 * Math.acos(Math.max(-1, Math.min(1, d_chord / R)));
+                const area = R**2 * (theta - Math.sin(theta)) / 2;
+                
+                // Moment of circular segment about center:
+                // Mn_c = 0.85 * fc * (2/3 * R^3 * sin^3(theta/2))
+                const Cc = 0.85 * fc * area;
+                const Mn_c = (0.85 * fc * (2/3) * Math.pow(R, 3) * Math.pow(Math.sin(theta/2), 3));
+                
+                let Pn = Cc;
+                let Mn = Mn_c;
+
+                // Steel forces
+                let et = 0;
+                for(let i=0; i<nbars; i++) {
+                    const ang = (i / nbars) * Math.PI * 2;
+                    const dy = dr * Math.cos(ang); // dist from center (+ is compression side)
+                    const d_i = R - dy;
+                    const eps = 0.003 * (c - d_i) / c;
+                    const fs = Math.max(-fy, Math.min(fy, eps * Es));
+                    let force = fs * (Math.PI * barDia**2 / 4);
+                    // Displaced concrete correction
+                    if(eps > 0 && d_i < a) force -= 0.85 * fc * (Math.PI * barDia**2 / 4);
+                    
+                    Pn += force;
+                    Mn += force * dy;
+                    
+                    // Track extreme tension strain (lowest dy = tension side)
+                    if (d_i > R) et = Math.max(et, Math.abs(eps));
+                }
+
+                // Phi transition (ACI 9.3.2.2)
+                let phi = phiSpiral; // 0.75 for spiral
+                const ey = fy / Es;
+                if (et >= 0.005) phi = 0.90;
+                else if (et > ey) phi = phiSpiral + (0.90 - phiSpiral) * (et - ey) / (0.005 - ey);
+
+                points.push({ x: (Mn * phi) / 1e6, y: (Pn * phi) / 1000 });
+            });
+            return points.sort((a,b) => b.y - a.y);
+        }
+
+        function drawSection(D, cover, barDia, nbars, ds) {
+            const canvas = document.getElementById('sectionCanvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const scale = (canvas.width - 40) / D;
+            const cx = canvas.width / 2, cy = canvas.height / 2;
+
+            ctx.fillStyle = '#e2e8f0'; ctx.beginPath(); ctx.arc(cx, cy, D*scale/2, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#475569'; ctx.lineWidth = 2; ctx.stroke();
+
+            // Spiral
+            ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
+            ctx.beginPath(); ctx.arc(cx, cy, (D/2 - cover)*scale, 0, Math.PI*2); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Bars
+            ctx.fillStyle = '#0f172a';
+            const dr = (D/2 - cover - ds - barDia/2) * scale;
+            for(let i=0; i<nbars; i++) {
+                const ang = (i / nbars) * Math.PI * 2;
+                ctx.beginPath(); ctx.arc(cx + dr*Math.cos(ang), cy + dr*Math.sin(ang), barDia*scale/2, 0, Math.PI*2); ctx.fill();
+            }
+        }
+
+        function updateChart(data, userPt, pMax) {
+            const ctx = document.getElementById('interactionChart').getContext('2d');
+            if(myChart) myChart.destroy();
+            const clipped = data.map(p => ({x: p.x, y: Math.min(p.y, pMax)})).filter(p => p.y >= 0);
+            myChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        { label: 'Design Strength', data: clipped, showLine: true, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, pointRadius: 0 },
+                        { label: 'Load Point', data: [userPt], backgroundColor: '#ef4444', pointRadius: 6 }
+                    ]
+                },
+                options: { maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Moment (kN-m)' }, min: 0 }, y: { title: { display: true, text: 'Axial (kN)' }, min: 0 } } }
+            });
+        }
+
+        function runUnitTest() {
+            // Based on Example 10.5
+            // 20" diameter, Pu=500k, Mu=225 ft-k
+            document.getElementById('fc').value = 27.6;
+            document.getElementById('fy').value = 413.7;
+            document.getElementById('diam').value = 508;
+            document.getElementById('nbars').value = 8;
+            document.getElementById('barSize').value = 28;
+            document.getElementById('Pu').value = 2224;
+            document.getElementById('Mux').value = 305;
+            document.getElementById('Muy').value = 0;
+            calculate();
+            alert("Example 10.5 (SI) loaded. Verify capacity summary.");
+        }
+    </script>
+</body>
+</html>

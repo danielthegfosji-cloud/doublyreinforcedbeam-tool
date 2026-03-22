@@ -1,4 +1,4 @@
-# RC Design Suite
+# SimpleCrete Suite
 
 ### [🚀 Live Demo](https://danielthegfosji-cloud.github.io/reinforcedConcrete/)
 

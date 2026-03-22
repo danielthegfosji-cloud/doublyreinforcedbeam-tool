@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Combined Footing Design | RC Design Suite</title>
+    <title>Combined Footing Design | SimpleCrete</title>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -202,6 +202,9 @@
                 </div>
 
                 <button type="button" class="calc-btn" onclick="calculate()">Design Footing</button>
+                <button type="button" class="calc-btn" onclick="runUnitTest()" style="background-color: var(--text-muted); margin-top: 0;">
+                    <i class="fa-solid fa-vial"></i> Run Textbook Test (Ex 12.6)
+                </button>
             </form>
         </div>
     </nav>
@@ -578,6 +581,8 @@
             drawCanvas(L, B, C1, C2, spacing, dist_edge_to_col1, {
                 numBars: Math.min(numBars, 100), spacing_trans, spacing_min, d, h, cover, filters
             });
+
+            return { L, B, Area_final, qe, V_crit, phiVc, Vu_punch, phiVc_punch, numBars };
         }
 
         function drawCanvas(L, B, c1, c2, spacing, edgeDist, data) {
@@ -828,6 +833,45 @@
             });
             calculate();
         };
+
+        function runUnitTest() {
+            // Values from Example 12.6 (converted to SI)
+            // PD1=120k -> 533.8kN, PL1=100k -> 444.8kN, C1=18in -> 457mm
+            // PD2=200k -> 889.6kN, PL2=150k -> 667.2kN, C2=20in -> 508mm
+            // Spacing=12ft -> 3.658m, qa=5ksf -> 239.4kPa
+            // h=27in -> 686mm, Df=6ft -> 1.829m, gammaS=100pcf -> 15.7kN/m3
+            
+            document.getElementById('pd1').value = 533.8;
+            document.getElementById('pl1').value = 444.8;
+            document.getElementById('c1').value = 457;
+            document.getElementById('edgeDist').value = 0; // Prop line at face in Ex 12.6
+            document.getElementById('pd2').value = 889.6;
+            document.getElementById('pl2').value = 667.2;
+            document.getElementById('c2').value = 508;
+            document.getElementById('spacing').value = 3.658;
+            document.getElementById('qa').value = 239.4;
+            document.getElementById('h_ftg').value = 686;
+            document.getElementById('depth_base').value = 1.829;
+            document.getElementById('gamma_s').value = 15.7;
+            document.getElementById('fc').value = 21;
+            document.getElementById('fy').value = 420;
+
+            const results = calculate();
+
+            const calcL = results.L;
+            const calcB = results.B;
+
+            // Verification (Expected L: ~4.95m, B: ~2.50m)
+            // Tolerance check
+            const passL = Math.abs(calcL - 4.95) < 0.05;
+            const passB = Math.abs(calcB - 2.50) < 0.05;
+
+            if (passL && passB) {
+                alert("✅ Unit Test Passed!\n\nParameters set to Example 12.6.\nExpected L: 4.95m, B: 2.50m.\nCalculated L: " + calcL.toFixed(2) + "m, B: " + calcB.toFixed(2) + "m.\n\nResults match textbook derivations.");
+            } else {
+                alert("❌ Unit Test Failed!\n\nCalculated values deviate from textbook expectations.\nL: " + calcL.toFixed(2) + "m (Exp: 4.95m)\nB: " + calcB.toFixed(2) + "m (Exp: 2.50m)");
+            }
+        }
     </script>
 </body>
 </html>

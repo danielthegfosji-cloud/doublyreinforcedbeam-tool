@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RC Design Suite | Continuous Beams</title>
+    <title>SimpleCrete | Continuous Beams</title>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -597,6 +597,12 @@
             drawSchematic();
             const container = document.getElementById('sectionsContainer');
             container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #64748b; font-size: 0.9rem; padding: 2rem;">Calculate to see section details for each zone.</p>';
+            
+            // Attach listeners for live update
+            document.querySelectorAll('.input-panel input, .input-panel select').forEach(el => {
+                el.addEventListener('input', calculateFrame);
+            });
+            calculateFrame();
         };
 
         function calculateFrame() {

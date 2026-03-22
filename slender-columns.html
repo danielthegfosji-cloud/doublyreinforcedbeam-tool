@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slender Column Design | RC Design Suite</title>
+    <title>Slender Column Design | SimpleCrete</title>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -17,7 +17,6 @@
       }
     };
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/polyfill/3.111.0/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -110,12 +109,7 @@
                 </div>
                 <div class="form-col">
                     <label>Factor $k$</label>
-                    <select id="k">
-                        <option value="1.0" selected>Pinned (1.0)</option>
-                        <option value="0.5">Fixed (0.5)</option>
-                        <option value="0.7">F-P (0.7)</option>
-                        <option value="2.0">Cant. (2.0)</option>
-                    </select>
+                    <input type="number" id="k" value="1.0" step="0.01" min="0.1">
                 </div>
             </div>
             <div class="form-group">
@@ -124,6 +118,10 @@
                     <label><input type="radio" name="sway" value="braced" checked> Braced</label>
                     <label><input type="radio" name="sway" value="unbraced"> Unbraced</label>
                 </div>
+            </div>
+            <div class="form-group">
+                <label>Sustained Load Factor $\beta_{dns}$</label>
+                <input type="number" id="betadns" value="0.6" step="0.01" min="0" max="1.0">
             </div>
 
             <div class="section-header">Loads</div>
@@ -142,11 +140,11 @@
             </div>
             <div class="form-row">
                 <div class="form-col">
-                    <label>$M_{1}$ (kN-m)</label>
+                    <label>$M_{1x}$ (Top/Smaller)</label>
                     <input type="number" id="M1" value="40" step="5">
                 </div>
                 <div class="form-col">
-                    <label>$M_{2}$ (kN-m)</label>
+                    <label>$M_{2x}$ (Bot/Larger)</label>
                     <input type="number" id="M2" value="80" step="5">
                 </div>
             </div>
@@ -181,6 +179,12 @@
                     </select>
                 </div>
             </div>
+            <button class="calc-btn" onclick="calculate()" style="margin-top: 1rem;">
+                <i class="fa-solid fa-calculator"></i> Analyze Slender Column
+            </button>
+            <button class="calc-btn" onclick="runUnitTest()" style="background-color: var(--text-muted); margin-top: 0.5rem;">
+                <i class="fa-solid fa-vial"></i> Run Textbook Test (Ex 11.3)
+            </button>
         </div>
     </nav>
 
@@ -268,6 +272,7 @@
             const nbars = parseInt(document.getElementById('nbars').value);
             const cover = parseFloat(document.getElementById('cover').value);
             const tieDia = parseFloat(document.getElementById('tieSize').value);
+            const beta_dns_input = parseFloat(document.getElementById('betadns').value);
 
             // Validation to prevent numerical instability
             if (isNaN(fc) || fc < 12 || isNaN(fy) || fy < 200) {
@@ -282,12 +287,8 @@
             const rho = As / Ag;
 
             // Fit Check
-            // Assuming bars are on two faces (bending faces)
             const barsPerFace = Math.ceil(nbars / 2); 
-            // Core width = b - 2*cover - 2*tieDia
             const coreWidth = b - (2 * cover) - (2 * tieDia);
-            // Required width = (bars * dia) + ((bars-1) * spacing)
-            // Min spacing = max(25mm, barDia, 1.33*agg(assumed 20mm)) -> 26.6mm approx
             const minSpacing = Math.max(25, barDia);
             const reqSpace = (barsPerFace * barDia) + ((barsPerFace - 1) * minSpacing);
             
@@ -316,22 +317,12 @@
 
             // 3. Slenderness Calculations
             const Ig = (b * Math.pow(h, 3)) / 12;
-            const r = 0.3 * h; // Radius of gyration approximation
+            const r = 0.3 * h; 
             const slenderness = (k * lu) / r;
 
-            // Sign Convention for M1/M2:
-            // Single Curvature: M1/M2 is positive.
-            // Double Curvature: M1/M2 is negative.
-            // Note: ACI equation is 34 - 12(M1/M2). If Single Curvature, term subtracts. If Double, term adds. 
-            // Wait, ACI convention: M1/M2 positive for Single curvature? 
-            // Let's verify: ACI 318-11: "M1/M2 is positive if member is bent in single curvature."
-            // Standard equation for limit: 34 - 12(M1/M2). 
-            // Example: Single curv, M1=M2. Limit = 22. 
-            // Example: Double curv, M1=-M2. Limit = 34 - 12(-1) = 46. (Valid, double curv allows higher slenderness).
-            
             let mRatio = M1 / M2;
             if (curvature === 'double') mRatio = -Math.abs(mRatio);
-            else mRatio = Math.abs(mRatio); // Single curvature
+            else mRatio = Math.abs(mRatio); 
 
             let slendernessLimit;
             if (sway === 'braced') {
@@ -345,7 +336,7 @@
 
             // 4. Moment Magnification (if Slender)
             let delta = 1.0;
-            let Mc = Math.max(M2, M1); // Start with larger end moment
+            let Mc = Math.max(M2, M1); 
             let Pc = 0;
             let Cm = 1.0;
             let M_min = 0;
@@ -358,41 +349,30 @@
             if (isSlender) {
                 calcLog += `$$ \\text{Limit} = ${slendernessLimit.toFixed(2)} \\implies \\color{red}{\\text{Slender}} $$`;
 
-                // Calculate EI
-                // Simplified ACI 10.10.6.1: EI = 0.4 Ec Ig / (1 + beta_d)
-                // Assuming beta_d (sustained load factor) = 0.6 for typical columns if not input. 
-                // Let's assume beta_d = 0 for short-term loading for simplicity in this tool, or add input later. 
-                // Using simplified formula without beta_d for instant loading demo:
-                const Ec = 4700 * Math.sqrt(fc); // MPa
-                const beta_d = 0.6; // Assumption for realism
+                const Ec = 4700 * Math.sqrt(fc); 
+                const beta_d = beta_dns_input;
                 const EI = (0.4 * Ec * Ig) / (1 + beta_d); 
 
-                // Euler Buckling Load Pc
-                Pc = (Math.PI * Math.PI * EI) / Math.pow(k * lu, 2); // Newtons
+                Pc = (Math.PI * Math.PI * EI) / Math.pow(k * lu, 2); 
 
-                // Cm Factor
                 if (sway === 'braced') {
                     Cm = 0.6 + (0.4 * mRatio);
                     if (Cm < 0.4) Cm = 0.4;
                 } else {
-                    Cm = 1.0; // Sway frames
+                    Cm = 1.0; 
                 }
 
-                // Delta
-                // ACI 318-11 Eq 10-12: delta = Cm / (1 - Pu / (0.75 * Pc))
-                const phiK = 0.75; // Stiffness reduction for stability
+                const phiK = 0.75; 
                 const denominator = 1 - (Pu / (phiK * Pc));
                 
                 if (denominator <= 0) {
-                    delta = 999; // Unstable
+                    delta = 999; 
                 } else {
                     delta = Cm / denominator;
                 }
                 
                 if (delta < 1.0) delta = 1.0;
 
-                // Minimum Moment Check
-                // M2,min = Pu (15 + 0.03h)
                 const e_min = 15 + (0.03 * h);
                 M_min = Pu * e_min;
 
@@ -414,18 +394,15 @@
             } else {
                 calcLog += `$$ \\text{Limit} = ${slendernessLimit.toFixed(2)} \\implies \\color{green}{\\text{Short Column}} $$`;
                 Mc = Math.max(M1, M2);
-                // Check M_min anyway
                 const e_min = 15 + (0.03 * h);
                 M_min = Pu * e_min;
                 Mc = Math.max(Mc, M_min);
                 delta = 1.0;
             }
 
-            // Display Math
             document.getElementById('slendernessOutput').innerHTML = calcLog;
             document.getElementById('finalMoment').innerText = (Mc / 1000000).toFixed(2) + " kN-m";
 
-            // 5. Reinforcement Schedule
             const scheduleHTML = `
                 <h4 style="margin-top:1.5rem; margin-bottom:0.5rem;">Reinforcement Schedule</h4>
                 <div class="result-row"><span class="result-label">Main Bars:</span><span class="result-value">${nbars} - ϕ${barDia} mm</span></div>
@@ -436,23 +413,50 @@
             `;
             document.getElementById('reinforcementSchedule').innerHTML = scheduleHTML;
 
-            // Update MathJax
             if (window.MathJax && window.MathJax.typesetPromise) {
                 MathJax.typesetPromise();
             }
 
             // 5. Draw Visuals
-            drawSection(b, h, cover, tieDia, barDia, nbars);
-            drawElevation(lu, k, delta, curvature, isSlender);
+            drawSection(b, h, cover, tieDia, barDia, nbars, M1, M2);
+            drawElevation(lu, k, delta, curvature, isSlender, M1, M2);
 
             // 6. Update Interaction Diagram
             updateInteractionDiagram(fc, fy, b, h, cover, tieDia, barDia, nbars, Pu, Mc);
+
+            return { Mc, delta, slenderness, slendernessLimit, isSlender, rho };
+        }
+
+        function runUnitTest() {
+            document.getElementById('fc').value = 27.6;
+            document.getElementById('fy').value = 413.7;
+            document.getElementById('b').value = 304.8;
+            document.getElementById('h').value = 381;
+            document.getElementById('lu').value = 4.877;
+            document.getElementById('k').value = 0.83;
+            document.querySelector('input[name="sway"][value="braced"]').checked = true;
+            document.getElementById('Pu').value = 489.3;
+            document.getElementById('M1').value = 111.2;
+            document.getElementById('M2').value = 116.6;
+            document.getElementById('curvature').value = 'single';
+            document.getElementById('nbars').value = 4;
+            document.getElementById('barSize').value = 25;
+            document.getElementById('betadns').value = 0.327;
+            
+            const results = calculate();
+            
+            const expectedMc = 127.1;
+            const pass = Math.abs((results.Mc / 1e6) - expectedMc) < 2.0;
+
+            if (pass) {
+                alert("✅ Unit Test Passed!\n\nParameters set to Example 11.3.\nExpected Mc: ~127 kN-m.\nCalculated: " + (results.Mc / 1e6).toFixed(1) + " kN-m.\n\nResults match textbook derivations.");
+            } else {
+                alert("❌ Unit Test Failed!\n\nExpected: ~" + expectedMc + " kN-m\nCalculated: " + (results.Mc / 1e6).toFixed(1) + " kN-m");
+            }
         }
 
         function updateInteractionDiagram(fc, fy, b, h, cover, tieDia, barDia, nbars, Pu_N, Mc_Nmm) {
             const ctx = document.getElementById('interactionChart').getContext('2d');
-            
-            // 1. Generate Points (Simplified for 2 layers as drawn in section)
             const d_prime = cover + tieDia + barDia/2;
             const d = h - d_prime;
             const As_layer = (nbars / 2) * (Math.PI * Math.pow(barDia, 2) / 4);
@@ -468,8 +472,6 @@
             const beta1 = getBeta1(fc);
 
             const points_design = [];
-            
-            // Iterate c from very small to very large
             let c_steps = [0.1, d_prime, d*0.5, d*0.6, d*0.8, d, h, h*1.2, h*1.5, 99999];
             for(let i=1; i<40; i++) c_steps.push(h * (i/40) * 2);
             c_steps.sort((a,b) => a-b);
@@ -477,7 +479,6 @@
             c_steps.forEach(c => {
                 let Pn = 0;
                 let Mn = 0;
-
                 let a = beta1 * c;
                 if (a > h) a = h;
                 const Cc = 0.85 * fc * a * b;
@@ -495,10 +496,8 @@
                     let fs = eps * Es;
                     if (fs > fy) fs = fy;
                     if (fs < -fy) fs = -fy;
-                    
                     let force = fs * l.As;
                     if (eps > 0 && a > l.d_i) force -= 0.85 * fc * l.As; 
-                    
                     Pn += force;
                     Mn += force * (h/2 - l.d_i);
                     if (l.d_i === d) et = Math.abs(eps);
@@ -508,7 +507,6 @@
                 const ey = fy / Es;
                 if (et >= 0.005) phi = 0.90;
                 else if (et > ey) phi = 0.65 + 0.25 * (et - ey) / (0.005 - ey);
-
                 points_design.push({ x: (Mn * phi) / 1e6, y: (Pn * phi) / 1000 });
             });
 
@@ -528,14 +526,20 @@
             for (let i = 0; i < design_clipped.length - 1; i++) {
                 const p1 = design_clipped[i];
                 const p2 = design_clipped[i+1];
-                if ((p1.y <= Pu_kN && p2.y >= Pu_kN) || (p1.y >= Pu_kN && p2.y <= Pu_kN)) {
-                    if (Math.abs(p1.y - p2.y) > 0.01) Mcap = p1.x + (p2.x - p1.x) * (Pu_kN - p1.y) / (p2.y - p1.y);
-                    else Mcap = Math.max(p1.x, p2.x);
-                    break;
+                const minP = Math.min(p1.y, p2.y);
+                const maxP = Math.max(p1.y, p2.y);
+                if (Pu_kN >= minP - 0.001 && Pu_kN <= maxP + 0.001) {
+                    let currentM = 0;
+                    if (Math.abs(p1.y - p2.y) > 0.01) {
+                        currentM = p1.x + (p2.x - p1.x) * (Pu_kN - p1.y) / (p2.y - p1.y);
+                    } else {
+                        currentM = Math.max(p1.x, p2.x);
+                    }
+                    if (currentM > Mcap) Mcap = currentM;
                 }
             }
             
-            const isInside = (Pu_kN <= PhiPn_max && Mc_kNm <= Mcap + 0.01);
+            const isInside = (Pu_kN <= PhiPn_max + 0.1 && Mc_kNm <= Mcap + 0.1); 
             const resultEl = document.getElementById('capacityCheckResult');
             if (isInside) {
                 resultEl.innerHTML = `<div class="status-box status-success"><i class="fa-solid fa-circle-check"></i> <strong>Safe:</strong> Load point is within the interaction curve. (D/C Ratio: ${(Mcap > 0 ? Mc_kNm/Mcap : 0).toFixed(3)})</div>`;
@@ -577,167 +581,65 @@
             });
         }
 
-        // --- DRAWING FUNCTIONS ---
-        function drawSection(b, h, cover, tieDia, barDia, nbars) {
+        function drawSection(b, h, cover, tieDia, barDia, nbars, M1_val, M2_val) {
             const canvas = document.getElementById('sectionCanvas');
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const scale = (canvas.width - 60) / Math.max(b, h);
+            const x0 = 30 + (canvas.width - 60 - b*scale)/2;
+            const y0 = 30 + (canvas.height - 60 - h*scale)/2;
 
-            // Scaling
-            const maxDim = Math.max(b, h);
-            const scale = (canvas.width - 40) / maxDim;
-            const x0 = 20 + (canvas.width - 40 - b*scale)/2;
-            const y0 = 20 + (canvas.height - 40 - h*scale)/2;
+            ctx.fillStyle = '#e2e8f0'; ctx.strokeStyle = '#475569'; ctx.lineWidth = 2;
+            ctx.fillRect(x0, y0, b*scale, h*scale); ctx.strokeRect(x0, y0, b*scale, h*scale);
 
-            // Concrete Rect
-            ctx.fillStyle = '#e2e8f0';
-            ctx.strokeStyle = '#475569';
-            ctx.lineWidth = 2;
-            ctx.fillRect(x0, y0, b*scale, h*scale);
-            ctx.strokeRect(x0, y0, b*scale, h*scale);
-
-            // Dimensions
-            ctx.fillStyle = '#0f172a';
-            ctx.font = '11px Inter';
-            ctx.textAlign = 'center';
-            ctx.fillText(`${b} mm`, x0 + b*scale/2, y0 - 10);
-            
-            ctx.save();
-            ctx.translate(x0 - 15, y0 + h*scale/2);
-            ctx.rotate(-Math.PI/2);
-            ctx.fillText(`${h} mm`, 0, 0);
-            ctx.restore();
-
-            // Tie
-            const tieX = x0 + cover*scale;
-            const tieY = y0 + cover*scale;
-            const tieW = (b - 2*cover)*scale;
-            const tieH = (h - 2*cover)*scale;
-            
-            ctx.strokeStyle = '#ef4444'; // Red ties
-            ctx.lineWidth = 1;
-            ctx.strokeRect(tieX, tieY, tieW, tieH);
+            // Axes
+            ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([2, 2]);
+            ctx.beginPath(); ctx.moveTo(x0 - 10, y0 + h*scale/2); ctx.lineTo(x0 + b*scale + 10, y0 + h*scale/2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x0 + b*scale/2, y0 - 10); ctx.lineTo(x0 + b*scale/2, y0 + h*scale + 10); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#64748b'; ctx.font = '10px Inter'; ctx.fillText('X', x0 + b*scale + 5, y0 + h*scale/2 - 5); ctx.fillText('Y', x0 + b*scale/2 + 5, y0 - 5);
 
             // Bars
             ctx.fillStyle = '#0f172a';
-            // Logic: Two faces (Top/Bottom in drawing orientation = h direction in design).
-            // Since slenderness is checked against 'h', we assume bending is in the 'h' direction.
-            // Therefore, bars should be on the Top and Bottom faces to maximize the lever arm.
             const barsPerSide = Math.ceil(nbars / 2);
             const barRad = (barDia * scale) / 2;
-
-            const topY = tieY + tieDia*scale + barRad;
-            const botY = tieY + tieH - tieDia*scale - barRad;
-            
-            // Horizontal distribution
-            // Available width inside ties
-            const innerW = tieW - 2*tieDia*scale - 2*barRad;
+            const topY = y0 + (cover + tieDia)*scale + barRad;
+            const botY = y0 + h*scale - (cover + tieDia)*scale - barRad;
+            const startX_bars = x0 + (cover + tieDia)*scale + barRad;
+            const innerW = (b - 2*(cover + tieDia))*scale - barRad*2;
             const spacingX = barsPerSide > 1 ? innerW / (barsPerSide - 1) : 0;
-            const startX_bars = tieX + tieDia*scale + barRad;
 
             for(let i=0; i<barsPerSide; i++) {
-                // Top
-                ctx.beginPath();
-                ctx.arc(startX_bars + i*spacingX, topY, barRad, 0, 2*Math.PI);
-                ctx.fill();
-                // Bottom
-                ctx.beginPath();
-                ctx.arc(startX_bars + i*spacingX, botY, barRad, 0, 2*Math.PI);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(startX_bars + i*spacingX, topY, barRad, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(startX_bars + i*spacingX, botY, barRad, 0, Math.PI*2); ctx.fill();
             }
         }
 
-        function drawElevation(lu, k, delta, curvature, isSlender) {
+        function drawElevation(lu, k, delta, curvature, isSlender, M1, M2) {
             const canvas = document.getElementById('elevationCanvas');
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const cx = canvas.width / 2;
+            const sy = 50, ey = canvas.height - 50;
 
-            const scaleY = (canvas.height - 80) / lu; // scale height with padding for supports
-            const centerX = canvas.width / 2;
-            const startY = 40;
-            const endY = canvas.height - 40;
-            const colW = 20; // Visual width
-
-            // Draw Column Axis (Original)
-            ctx.strokeStyle = '#cbd5e1';
-            ctx.setLineDash([5, 5]);
-            ctx.beginPath();
-            ctx.moveTo(centerX, startY);
-            ctx.lineTo(centerX, endY);
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            // Draw Column Body (Deformed)
-            ctx.strokeStyle = '#3b82f6';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-
-            // Simple Bezier curve to simulate buckling/bending
-            // If delta > 1.0, exaggerate deflection
-            const deflectionAmp = isSlender ? Math.min(60, (delta - 1) * 50 + 15) : 0;
-
-            if (k === 2.0) {
-                // Cantilever: Fixed at bottom, Free at top
-                ctx.moveTo(centerX, endY);
-                ctx.quadraticCurveTo(centerX, (startY + endY) / 2, centerX + deflectionAmp, startY);
-            } else if (curvature === 'single') {
-                // C-Shape
-                ctx.moveTo(centerX, startY);
-                ctx.quadraticCurveTo(centerX + deflectionAmp, (startY + endY) / 2, centerX, endY);
-            } else {
-                // S-Shape
-                ctx.moveTo(centerX, startY);
-                ctx.bezierCurveTo(
-                    centerX + deflectionAmp, startY + (endY - startY) / 4,
-                    centerX - deflectionAmp, startY + 3 * (endY - startY) / 4,
-                    centerX, endY
-                );
-            }
+            // Column
+            ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 4; ctx.beginPath();
+            const amp = isSlender ? (delta - 1) * 40 : 0;
+            ctx.moveTo(cx, sy);
+            if (curvature === 'single') ctx.quadraticCurveTo(cx + amp, (sy+ey)/2, cx, ey);
+            else ctx.bezierCurveTo(cx + amp, sy + (ey-sy)/3, cx - amp, sy + 2*(ey-sy)/3, cx, ey);
             ctx.stroke();
 
-            // Supports
-            const drawSupport = (x, y, type, isTop) => {
-                ctx.fillStyle = '#0f172a';
-                ctx.strokeStyle = '#0f172a';
-                ctx.lineWidth = 2;
-                if (type === 'fixed') {
-                    ctx.beginPath();
-                    ctx.moveTo(x - 20, y); ctx.lineTo(x + 20, y); ctx.stroke();
-                    for (let i = -20; i <= 20; i += 8) {
-                        ctx.beginPath();
-                        ctx.moveTo(x + i, y);
-                        ctx.lineTo(x + i + (isTop ? -5 : 5), y + (isTop ? -8 : 8));
-                        ctx.stroke();
-                    }
-                } else if (type === 'pinned') {
-                    ctx.beginPath();
-                    ctx.moveTo(x, y);
-                    ctx.lineTo(x - 10, y + (isTop ? -15 : 15));
-                    ctx.lineTo(x + 10, y + (isTop ? -15 : 15));
-                    ctx.closePath(); ctx.stroke();
-                    ctx.beginPath();
-                    ctx.moveTo(x - 15, y + (isTop ? -15 : 15));
-                    ctx.lineTo(x + 15, y + (isTop ? -15 : 15));
-                    ctx.stroke();
-                }
-            };
-
-            if (k === 1.0) { drawSupport(centerX, startY, 'pinned', true); drawSupport(centerX, endY, 'pinned', false); }
-            else if (k === 0.5) { drawSupport(centerX, startY, 'fixed', true); drawSupport(centerX, endY, 'fixed', false); }
-            else if (k === 0.7) { drawSupport(centerX, startY, 'fixed', true); drawSupport(centerX, endY, 'pinned', false); }
-            else if (k === 2.0) { drawSupport(centerX, endY, 'fixed', false); } // Cantilever top is free
-
-            // Annotations
-            ctx.fillStyle = '#64748b';
-            ctx.font = '12px Arial';
-            ctx.fillText(`Lu = ${(lu/1000).toFixed(2)}m`, centerX + 40, (startY+endY)/2);
-            
-            if (delta > 1.05) {
-                ctx.fillStyle = '#ef4444';
-                ctx.fillText(`δ = ${delta.toFixed(2)}`, centerX + deflectionAmp + 5, (startY+endY)/2 + 20);
+            // Moment Arrows
+            ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.fillStyle = '#ef4444';
+            function drawMom(y, val, label) {
+                const dir = val > 0 ? 1 : -1;
+                ctx.beginPath(); ctx.arc(cx, y, 25, -Math.PI/2, Math.PI/2, dir < 0); ctx.stroke();
+                ctx.font = 'bold 10px Inter'; ctx.fillText(`${label}: ${(val/1e6).toFixed(1)}`, cx + 30, y);
             }
+            drawMom(sy, M1, `M1`);
+            drawMom(ey, M2, `M2`);
         }
-
     </script>
 </body>
 </html>

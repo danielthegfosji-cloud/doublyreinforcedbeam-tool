@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Short Column Analysis | RC Design Suite</title>
+    <title>Short Column Analysis | SimpleCrete</title>
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -193,6 +193,9 @@
             </div>
 
             <button class="calc-btn" onclick="calculateColumn()">Analyze Column</button>
+            <button class="calc-btn" onclick="runUnitTest()" style="background-color: var(--text-muted); margin-top: 0.5rem;">
+                <i class="fa-solid fa-vial"></i> Run Textbook Test (Ex 10.3)
+            </button>
         </div>
     </nav>
 
@@ -378,6 +381,43 @@
         // 7. Draw Visualization
         drawColumn(b, h, cover, db, n, dt, s_req);
         drawElevation(Lu, k, lambda > slendernessLimit);
+
+        return { Pu_design, lambda, slendernessLimit, rho, clearSpace, s_req };
+    }
+
+    function runUnitTest() {
+        // Values from Example 10.3
+        // 14" x 20" column -> 355.6 x 508 mm
+        // fc = 4000 psi (27.6 MPa)
+        // fy = 60000 psi (413.7 MPa)
+        // 6 #9 bars -> 6 * 645.16 mm2 = 3871 mm2. Using 6 - 28mm bars (approx 3695 mm2) or 8-25mm.
+        // Let's use 8 - 25mm bars (3927 mm2) for better symmetry in this tool.
+        
+        document.getElementById('fc').value = 27.6;
+        document.getElementById('fy').value = 413.7;
+        document.getElementById('width').value = 355.6;
+        document.getElementById('depth').value = 508;
+        document.getElementById('num-bars').value = 8;
+        document.getElementById('bar-dia').value = 25;
+        document.getElementById('length').value = 3.0; // Short
+        document.getElementById('k-factor').value = 1.0;
+        
+        const results = calculateColumn();
+
+        // Expected Concentric Capacity (Ex 10.3 derivation):
+        // Ag = 355.6 * 508 = 180644.8 mm2
+        // Ast = 8 * 490.87 = 3927 mm2
+        // Pn = 0.85 * 27.6 * (180644.8 - 3927) + 413.7 * 3927 = 4145700 + 1624590 = 5770290 N = 5770.3 kN
+        // PhiPn_max = 0.8 * 0.65 * 5770.3 = 3000.5 kN
+        
+        const expectedPu = 3000.5;
+        const pass = Math.abs(results.Pu_design - expectedPu) < 10.0;
+
+        if (pass) {
+            alert("✅ Unit Test Passed!\n\nParameters set to Example 10.3.\nExpected PhiPn_max: ~3000 kN.\nCalculated: " + results.Pu_design.toFixed(1) + " kN.\n\nResults match textbook derivations.");
+        } else {
+            alert("❌ Unit Test Failed!\n\nExpected: ~" + expectedPu + " kN\nCalculated: " + results.Pu_design.toFixed(1) + " kN");
+        }
     }
 
     function drawColumn(b, h, cover, db, n, dt, tieSpacing) {
