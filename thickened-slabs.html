@@ -254,7 +254,7 @@
         </div>
         <div style="display: flex; align-items: center; gap: 1.5rem;">
             <a href="https://github.com/danielthegfosji-cloud/reinforcedConcrete" target="_blank" style="color: white; text-decoration: none; font-size: 0.9rem; opacity: 0.8;"><i class="fa-brands fa-github"></i> GitHub</a>
-            <div style="font-size: 0.8rem; opacity: 0.8;">Westergaard & ACI 318-11 v2.3</div>
+            <div style="font-size: 0.8rem; opacity: 0.8;">Westergaard & ACI 318-11 v2.4</div>
         </div>
     </nav>
 
@@ -345,7 +345,7 @@
                 <div class="panel-header">Visual Filter</div>
                 <div class="input-group" style="grid-template-columns: 1fr 20px;">
                     <label>Show Reinforcement</label>
-                    <input type="checkbox" id="showReinf" checked onchange="calculate()">
+                    <input type="checkbox" id="showReinf" checked onchange="requestDraw()">
                 </div>
                 <button class="btn-add" style="background:#64748b; font-size:0.7rem; margin-top:5px;" onclick="resetZoom()">Reset Zoom/Pan</button>
             </div>
@@ -412,51 +412,65 @@
     </div>
 
     <script>
+        // Data and State
         let columns = [
             {x: 0, y: 0, p: 76, h: 30}, {x: 5, y: 0, p: 76, h: 30}, {x: 10, y: 0, p: 76, h: 30}, {x: 15, y: 0, p: 76, h: 30}, {x: 20, y: 0, p: 76, h: 30}, {x: 25, y: 0, p: 76, h: 30},
             {x: 0, y: 20, p: 76, h: 30}, {x: 5, y: 20, p: 76, h: 30}, {x: 10, y: 20, p: 76, h: 30}, {x: 15, y: 20, p: 76, h: 30}, {x: 20, y: 20, p: 76, h: 30}, {x: 25, y: 20, p: 76, h: 30}
         ];
-        const planCanvas = document.getElementById('planCanvas');
-        const eleCanvas = document.getElementById('eleCanvas');
-        const ctxPlan = planCanvas.getContext('2d');
-        const ctxEle = eleCanvas.getContext('2d');
-
-        // Zoom and Pan state
+        
+        let lastResults = {}; // Cache for visualization
         let zoom = 1.0;
         let panX = 0;
         let panY = 0;
         let isDragging = false;
         let lastMouseX = 0;
         let lastMouseY = 0;
+        let drawRequested = false;
 
+        const planCanvas = document.getElementById('planCanvas');
+        const eleCanvas = document.getElementById('eleCanvas');
+        const ctxPlan = planCanvas.getContext('2d');
+        const ctxEle = eleCanvas.getContext('2d');
+
+        // High Performance Rendering Loop
+        function requestDraw() {
+            if (!drawRequested) {
+                drawRequested = true;
+                requestAnimationFrame(() => {
+                    drawPlan();
+                    drawElevation();
+                    drawRequested = false;
+                });
+            }
+        }
+
+        // Event Listeners for Interaction
         planCanvas.addEventListener('wheel', (e) => {
             e.preventDefault();
             const zoomSpeed = 0.1;
             if (e.deltaY < 0) zoom *= (1 + zoomSpeed);
             else zoom /= (1 + zoomSpeed);
             zoom = Math.min(Math.max(0.5, zoom), 5);
-            calculate();
+            requestDraw();
         });
 
         planCanvas.addEventListener('mousedown', (e) => {
             isDragging = true;
-            lastMouseX = e.clientX;
-            lastMouseY = e.clientY;
+            lastMouseX = e.clientX; lastMouseY = e.clientY;
         });
 
         window.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
             panX += e.clientX - lastMouseX;
             panY += e.clientY - lastMouseY;
-            lastMouseX = e.clientX;
-            lastMouseY = e.clientY;
-            calculate();
+            lastMouseX = e.clientX; lastMouseY = e.clientY;
+            requestDraw();
         });
 
         window.addEventListener('mouseup', () => { isDragging = false; });
 
         function resetZoom() {
-            zoom = 1.0; panX = 0; panY = 0; calculate();
+            zoom = 1.0; panX = 0; panY = 0; requestDraw();
         }
 
         function getColumnCondition(x, y, L, W, D_edge = 0.5) {
@@ -473,13 +487,9 @@
             const p = parseFloat(document.getElementById('colP').value);
             const h = parseFloat(document.getElementById('colH').value);
             if (isNaN(x) || isNaN(y) || isNaN(p) || isNaN(h)) return;
-
             for (let c of columns) {
                 const dist = Math.sqrt(Math.pow(c.x - x, 2) + Math.pow(c.y - y, 2));
-                if (dist < 0.3) {
-                    alert('Column is too close to an existing column.');
-                    return;
-                }
+                if (dist < 0.3) { alert('Column is too close.'); return; }
             }
             columns.push({x, y, p, h});
             renderColumnList();
@@ -500,18 +510,18 @@
 
             list.innerHTML = columns.map((c, i) => {
                 const cond = getColumnCondition(c.x, c.y, L, W);
-                const pairIdx = getPairIndex(c, i);
-                const isPaired = pairIdx !== -1;
-                const pairLabel = isPaired ? `<span style="font-size:0.6rem; background:#dcfce7; padding:2px 4px; border-radius:4px; margin-left:4px;">Paired w/ Col ${pairIdx+1}</span>` : '';
+                const pIdx = getPairIndex(c, i);
+                const isPaired = pIdx !== -1;
                 return `
                 <div class="col-item" style="${isPaired ? 'border-left: 3px solid var(--success);' : ''}">
-                    <span>Col ${i+1}: (${c.x}, ${c.y}) - ${c.p}kN / ${c.h}kN(H) <strong style="color:var(--accent)">[${cond}]</strong> ${pairLabel}</span>
+                    <span>Col ${i+1}: (${c.x}, ${c.y}) - ${c.p}kN / ${c.h}kN <strong style="color:var(--accent)">[${cond}]</strong></span>
                     <button style="color:red; border:none; background:none; cursor:pointer;" onclick="removeColumn(${i})">×</button>
                 </div>
             `}).join('');
         }
 
         function calculate() {
+            // Read UI
             const L = parseFloat(document.getElementById('L_m').value);
             const W = parseFloat(document.getElementById('W_m').value);
             const hs = parseFloat(document.getElementById('hs_mm').value);
@@ -526,231 +536,125 @@
             const db = parseFloat(document.getElementById('db_mm').value);
             const db_edge = parseFloat(document.getElementById('db_edge').value);
             const n_edge = parseInt(document.getElementById('n_edge').value);
-            const showReinf = document.getElementById('showReinf').checked;
 
             renderColumnList();
 
+            // Analysis
             const E = 4700 * Math.sqrt(fc);
-            const Poisson = 0.15;
-            const phi_shear = 0.75;
-            const phi_tension = 0.90;
-            const d = hs - 40;
-            const d_edge = he - 50;
-            const k_Nmm3 = k * 1e-6; 
-            const l = Math.pow((E * Math.pow(hs, 3)) / (12 * (1 - Poisson**2) * k_Nmm3), 0.25);
+            const phi_s = 0.75, phi_t = 0.90, d = hs - 40, d_edge = he - 50;
+            const l = Math.pow((E * Math.pow(hs, 3)) / (12 * (1 - 0.15**2) * (k * 1e-6)), 0.25);
 
-            let maxMpos = 0, maxMneg = 0, maxVuPunching = 0, maxPhiVcPunching = 0, maxVuOneWay = 0, maxPhiVcOneWay = 0, worstPunchingCond = "Interior", maxBearingQ = 0, maxHairpinAs = 0, worstHairpinNetH = 0;
+            let maxMpos = 0, maxMneg = 0, maxVuP = 0, maxPhiVcP = 0, maxVuOW = 0, maxPhiVcOW = 0, worstCond = "Interior", maxQ = 0, maxAsTie = 0, worstNetH = 0;
 
             columns.forEach(col => {
-                const P_N = col.p * 1000 * 1.5;
-                const a = col_c / 2; 
-                const condition = getColumnCondition(col.x, col.y, L, W, 0.5);
+                const P_N = col.p * 1500, a = col_c / 2, cond = getColumnCondition(col.x, col.y, L, W, 0.5);
                 let Mpos = 0, Mneg = 0;
-                if (condition === "Corner") { Mneg = (P_N / 2) * (1 - Math.pow( (a * 1.414) / l, 0.6)); Mpos = 0.2 * Mneg; }
-                else if (condition === "Edge") { Mpos = (P_N * (1 + Poisson) / 4) * (Math.log(l / a) + 0.43); Mneg = 0.06 * P_N; }
-                else { Mpos = (P_N * (1 + Poisson) / 4) * (Math.log(l / a) + 0.6159); Mneg = 0.05 * P_N; }
-                if (Mpos > maxMpos) maxMpos = Mpos;
-                if (Mneg > maxMneg) maxMneg = Mneg;
+                if (cond === "Corner") { Mneg = (P_N / 2) * (1 - Math.pow((a * 1.414)/l, 0.6)); Mpos = 0.2 * Mneg; }
+                else if (cond === "Edge") { Mpos = (P_N * 1.15 / 4) * (Math.log(l/a) + 0.43); Mneg = 0.06 * P_N; }
+                else { Mpos = (P_N * 1.15 / 4) * (Math.log(l/a) + 0.6159); Mneg = 0.05 * P_N; }
+                if (Mpos > maxMpos) maxMpos = Mpos; if (Mneg > maxMneg) maxMneg = Mneg;
 
-                let b0 = condition === "Interior" ? 4 * (col_c + d) : (condition === "Edge" ? 3 * col_c + 2 * d : 2 * col_c + d);
-                const VuP = P_N;
-                const phiVcP = phi_shear * 0.33 * Math.sqrt(fc) * b0 * d;
-                if (VuP > maxVuPunching) { maxVuPunching = VuP; maxPhiVcPunching = phiVcP; worstPunchingCond = condition; }
+                let b0 = cond === "Interior" ? 4*(col_c+d) : (cond === "Edge" ? 3*col_c+2*d : 2*col_c+d);
+                const phiVcP = phi_s * 0.33 * Math.sqrt(fc) * b0 * d;
+                if (P_N > maxVuP) { maxVuP = P_N; maxPhiVcP = phiVcP; worstCond = cond; }
 
-                if (condition !== "Interior") {
-                    const VuOW = P_N / 2;
-                    const phiVcOW = phi_shear * 0.17 * Math.sqrt(fc) * be * d_edge;
-                    if (VuOW > maxVuOneWay) { maxVuOneWay = VuOW; maxPhiVcOneWay = phiVcOW; }
-                    const q_applied = col.p / ((be/1000) * ((be+2*he)/1000));
-                    if (q_applied > maxBearingQ) maxBearingQ = q_applied;
+                if (cond !== "Interior") {
+                    const phiVcOW = phi_s * 0.17 * Math.sqrt(fc) * be * d_edge;
+                    if (P_N/2 > maxVuOW) { maxVuOW = P_N/2; maxPhiVcOW = phiVcOW; }
+                    const q = col.p / ((be/1000) * ((be + 2*he)/1000));
+                    if (q > maxQ) maxQ = q;
                 }
-                if (col.h > 0) {
-                    const net_thrust = Math.max(0, col.h * 1.5 - mu * (col.p / 1.5));
-                    if (net_thrust > worstHairpinNetH) { worstHairpinNetH = net_thrust; maxHairpinAs = (net_thrust * 1000) / (phi_tension * fy); }
-                }
+                const netH = Math.max(0, col.h * 1.5 - mu * (col.p / 1.5));
+                if (netH > worstNetH) { worstNetH = netH; maxAsTie = (netH * 1000) / (phi_t * fy); }
             });
 
-            const Mcr = (0.62 * Math.sqrt(fc) * (1000 * Math.pow(hs, 2) / 6)) / 1000;
-            const topBarNeeded = Math.abs(maxMneg) > Mcr;
+            const Mcr = (0.62 * Math.sqrt(fc) * (1000 * hs**2 / 6)) / 1000;
+            const topNeeded = Math.abs(maxMneg) > Mcr;
+            const area_bar = (Math.PI * db**2) / 4;
+            const As_d = Math.max((maxMpos * 1.0) / (0.9 * fy * 0.9 * d), 0.0018 * 1000 * hs);
+            let spacing = Math.floor(Math.min(450, Math.max(75, (area_bar * 1000) / As_d)) / 10) * 10;
 
-            renderFlexResults(l, maxMpos, maxMneg, Mcr);
-            renderShearResults(maxVuPunching, maxPhiVcPunching, worstPunchingCond, maxVuOneWay, maxPhiVcOneWay);
+            // Cache for drawing
+            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge, fy };
+
+            // Update DOM
+            renderResults();
+            requestDraw();
+        }
+
+        function renderResults() {
+            const r = lastResults;
+            document.getElementById('flexResults').innerHTML = `<div class="calc-step"><b>Rad. Stiffness:</b> ${r.l.toFixed(1)} mm</div><div class="calc-step"><b>Max $M_u^+$:</b> ${(r.maxMpos/1000).toFixed(2)} kNm/m</div><div class="calc-step"><b>Max $|M_u^-|$:</b> ${(r.maxMneg/1000).toFixed(2)} kNm/m</div><div class="calc-step"><b>Cracking $M_{cr}$:</b> ${(r.Mcr/1000).toFixed(2)} kNm/m</div>`;
             
-            const area_bar = (Math.PI * Math.pow(db, 2)) / 4;
-            const As_design = Math.max((maxMpos * 1.0) / (0.9 * fy * 0.9 * d), 0.0018 * 1000 * hs);
-            let spacing = Math.floor(Math.min(450, Math.max(75, (area_bar * 1000) / As_design)) / 10) * 10;
-
-            renderReinfResults(topBarNeeded, hs, spacing, db, db_edge, n_edge);
-            renderLateralGeotechResults(maxBearingQ, q_allow, maxHairpinAs, worstHairpinNetH);
-            drawPlan(L, W, l, columns, be, spacing, showReinf);
-            drawElevation(hs, he, be, topBarNeeded, n_edge, db_edge, maxHairpinAs);
-        }
-
-        function renderFlexResults(l, Mpos, Mneg, Mcr) {
-            document.getElementById('flexResults').innerHTML = `
-                <div class="calc-step"><b>Rad. of Stiffness ($l$):</b> ${l.toFixed(1)} mm</div>
-                <div class="calc-step"><b>Max $M_u^+$:</b> ${(Mpos/1000).toFixed(2)} kNm/m</div>
-                <div class="calc-step"><b>Max $|M_u^-|$:</b> ${(Mneg/1000).toFixed(2)} kNm/m</div>
-                <div class="calc-step"><b>Cracking $M_{cr}$:</b> ${(Mcr/1000).toFixed(2)} kNm/m</div>
-            `;
+            const rP = r.maxVuP / r.maxPhiVcP, rOW = r.maxVuOW > 0 ? r.maxVuOW / r.maxPhiVcOW : 0;
+            const pF = rP >= 1, owF = rOW >= 1;
+            document.getElementById('shearResults').innerHTML = `<div style="margin-bottom:1rem;" class="status-badge ${(!pF && !owF)?'status-success':'status-danger'}">${(!pF && !owF)?'Shear OK':'Shear Failure'}</div><div style="font-size:0.75rem; font-weight:700;">PUNCHING (${r.worstCond})</div><table class="result-table" style="margin-bottom:10px;"><tr><td>Ratio</td><td><strong>${(rP*100).toFixed(1)}%</strong> ${pF?'❌':'✅'}</td></tr></table><div style="font-size:0.75rem; font-weight:700;">ONE-WAY (Edge)</div><table class="result-table"><tr><td>Ratio</td><td><strong>${(rOW*100).toFixed(1)}%</strong> ${owF?'❌':'✅'}</td></tr></table>${pF?'<p style="color:red; font-size:0.75rem; font-weight:700;">⚠️ Punching Failure: Increase $h_s$ or $f\'_c$.</p>':''}${owF?'<p style="color:red; font-size:0.75rem; font-weight:700;">⚠️ One-Way Failure: Increase $h_e$ or $b_e$.</p>':''}`;
+            
+            document.getElementById('reinfResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--accent); font-weight:700;">Slab Mesh</td></tr><tr><td>Size/Spacing</td><td>${r.db}mm @ ${r.spacing}mm</td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Edge Detailing</td></tr><tr><td>Longitudinal</td><td>${r.n_edge}-${r.db_edge}mm bars</td></tr><tr><td>Top Mesh?</td><td>${r.topNeeded?'YES':'NO'}</td></tr></table>`;
+            
+            document.getElementById('lateralGeotechResults').innerHTML = `<div class="status-badge ${r.maxQ <= r.q_allow ? 'status-success':'status-danger'}">${r.maxQ <= r.q_allow ? 'Bearing OK':'Bearing Failure'}</div><table class="result-table" style="margin-top:10px;"><tr><td>Applied $q$</td><td>${r.maxQ.toFixed(1)} kPa</td></tr><tr><td>Ratio</td><td><strong>${((r.maxQ/r.q_allow)*100).toFixed(1)}%</strong></td></tr></table><div style="font-size:0.75rem; font-weight:700; margin-top:10px;">GABLE THRUST</div><table class="result-table"><tr><td>Req. $A_s$</td><td>${r.maxAsTie.toFixed(0)} mm²</td></tr></table>`;
+            
             if (window.MathJax) MathJax.typesetPromise();
         }
 
-        function renderShearResults(VuP, phiVcP, cond, VuOW, phiVcOW) {
-            const div = document.getElementById('shearResults');
-            const ratioP = (VuP / phiVcP);
-            const ratioOW = VuOW > 0 ? (VuOW / phiVcOW) : 0;
-            const pFailed = ratioP >= 1.0, owFailed = ratioOW >= 1.0;
-            const status = (!pFailed && !owFailed) ? `<span class="status-badge status-success">Shear OK</span>` : `<span class="status-badge status-danger">Shear Failure</span>`;
-            let recs = pFailed ? `<p style="color:var(--danger); font-size:0.75rem; font-weight:700; margin-top:8px;">⚠️ Punching Failure: Increase $h_s$ or $f'_c$.</p>` : '';
-            if (owFailed) recs += `<p style="color:var(--danger); font-size:0.75rem; font-weight:700; margin-top:4px;">⚠️ One-Way Failure: Increase $h_e$ or $b_e$.</p>`;
-            div.innerHTML = `
-                <div style="margin-bottom: 1rem;">${status}</div>
-                <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">PUNCHING (${cond})</div>
-                <table class="result-table" style="margin-bottom: 10px;">
-                    <tr><td>Ratio</td><td><strong>${(ratioP*100).toFixed(1)}%</strong> ${pFailed ? '❌' : '✅'}</td></tr>
-                </table>
-                <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">ONE-WAY (Edge)</div>
-                <table class="result-table">
-                    <tr><td>Ratio</td><td><strong>${(ratioOW*100).toFixed(1)}%</strong> ${owFailed ? '❌' : '✅'}</td></tr>
-                </table>
-                ${recs}
-            `;
-            if (window.MathJax) MathJax.typesetPromise();
-        }
-
-        function renderReinfResults(topNeeded, hs, spacing, db, db_edge, n_edge) {
-            document.getElementById('reinfResults').innerHTML = `
-                <table class="result-table">
-                    <tr><td colspan="2" style="color:var(--accent); font-weight:700;">Slab Mesh (Bottom)</td></tr>
-                    <tr><td>Bar Size</td><td>${db} mm</td></tr>
-                    <tr><td>Spacing</td><td><strong>@ ${spacing} mm c/c</strong></td></tr>
-                    <tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Edge Detailing</td></tr>
-                    <tr><td>Longitudinal</td><td>${n_edge} - ${db_edge} mm bars</td></tr>
-                    <tr><td>Top Mesh?</td><td>${topNeeded ? '<span style="color:var(--danger)">YES</span>' : 'NO'}</td></tr>
-                    <tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Anchorage</td></tr>
-                    <tr><td>Min Lap ($l_d$)</td><td>${(40 * db_edge).toFixed(0)} mm</td></tr>
-                </table>
-            `;
-        }
-
-        function renderLateralGeotechResults(maxBearingQ, q_allow, maxHairpinAs, worstHairpinNetH) {
-            const div = document.getElementById('lateralGeotechResults');
-            const bStatus = maxBearingQ <= q_allow ? `<span class="status-badge status-success">Bearing OK</span>` : `<span class="status-badge status-danger">Bearing Failure</span>`;
-            let tieD = maxHairpinAs > 0 ? `Provide ${Math.ceil(maxHairpinAs / (Math.PI * Math.pow(16, 2) / 4))}-N16 legs (U-bar)` : "Friction resists thrust.";
-            div.innerHTML = `
-                <div style="margin-bottom: 1rem;">${bStatus}</div>
-                <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">GEOTECHNICAL</div>
-                <table class="result-table" style="margin-bottom: 10px;">
-                    <tr><td>Applied $q$</td><td>${maxBearingQ.toFixed(1)} kPa</td></tr>
-                    <tr><td>Ratio</td><td><strong>${((maxBearingQ/q_allow)*100).toFixed(1)}%</strong></td></tr>
-                </table>
-                <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">GABLE THRUST TIES</div>
-                <table class="result-table">
-                    <tr><td>Req. $A_s$</td><td>${maxHairpinAs.toFixed(0)} mm²</td></tr>
-                    <tr><td>Detail</td><td><strong>${tieD}</strong></td></tr>
-                </table>
-            `;
-            if (window.MathJax) MathJax.typesetPromise();
-        }
-
-        function drawDimensionLine(ctx, x1, y1, x2, y2, text, offset = 30) {
-            const isHoriz = Math.abs(y1 - y2) < 2;
-            ctx.save();
-            ctx.strokeStyle = '#94a3b8'; ctx.fillStyle = '#64748b'; ctx.lineWidth = 1; ctx.font = '11px Inter'; ctx.textAlign = 'center';
-            ctx.setLineDash([5, 5]); ctx.beginPath();
-            if (isHoriz) { ctx.moveTo(x1, y1); ctx.lineTo(x1, y1 + offset); ctx.moveTo(x2, y1); ctx.lineTo(x2, y1 + offset); }
-            else { ctx.moveTo(x1, y1); ctx.lineTo(x1 + offset, y1); ctx.moveTo(x1, y2); ctx.lineTo(x1 + offset, y2); }
-            ctx.stroke();
-            ctx.setLineDash([]); ctx.beginPath();
-            const dimY = isHoriz ? y1 + offset * 0.8 : 0, dimX = isHoriz ? 0 : x1 + offset * 0.8;
-            if (isHoriz) { ctx.moveTo(x1, dimY); ctx.lineTo(x2, dimY); ctx.moveTo(x1, dimY); ctx.lineTo(x1 + 5, dimY - 3); ctx.moveTo(x1, dimY); ctx.lineTo(x1 + 5, dimY + 3); ctx.moveTo(x2, dimY); ctx.lineTo(x2 - 5, dimY - 3); ctx.moveTo(x2, dimY); ctx.lineTo(x2 - 5, dimY + 3); }
-            else { ctx.moveTo(dimX, y1); ctx.lineTo(dimX, y2); ctx.moveTo(dimX, y1); ctx.lineTo(dimX - 3, y1 + 5); ctx.moveTo(dimX, y1); ctx.lineTo(dimX + 3, y1 + 5); ctx.moveTo(dimX, y2); ctx.lineTo(dimX - 3, y2 - 5); ctx.moveTo(dimX, y2); ctx.lineTo(dimX + 3, y2 - 5); }
-            ctx.stroke();
-            if (isHoriz) ctx.fillText(text, (x1 + x2) / 2, dimY - 5);
-            else { ctx.save(); ctx.translate(dimX - 5, (y1 + y2) / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(text, 0, 0); ctx.restore(); }
-            ctx.restore();
-        }
-
-        function drawPlan(L, W, l, cols, be, reinfSpacing, showReinf) {
-            planCanvas.width = planCanvas.offsetWidth;
-            planCanvas.height = planCanvas.offsetHeight;
-            const cw = planCanvas.width, ch = planCanvas.height;
+        function drawPlan() {
+            const r = lastResults; if (!r.L) return;
+            const cw = planCanvas.width = planCanvas.offsetWidth, ch = planCanvas.height = planCanvas.offsetHeight;
             ctxPlan.clearRect(0,0,cw,ch);
-            
             ctxPlan.save();
-            ctxPlan.translate(panX + cw/2, panY + ch/2);
-            ctxPlan.scale(zoom, zoom);
-            ctxPlan.translate(-cw/2, -ch/2);
-
-            const padding = 60;
-            const scale = Math.min((cw - padding * 2)/L, (ch - padding * 2)/W);
-            const dx = (cw - L*scale)/2, dy = (ch - W*scale)/2;
-
-            // Thickened Edge Color
-            ctxPlan.fillStyle = '#e2e8f0';
-            ctxPlan.fillRect(dx, dy, L*scale, W*scale);
-            ctxPlan.fillStyle = '#f8fafc';
-            const be_scale = (be/1000) * scale;
-            ctxPlan.fillRect(dx + be_scale, dy + be_scale, (L - 2*be/1000)*scale, (W - 2*be/1000)*scale);
+            ctxPlan.translate(panX + cw/2, panY + ch/2); ctxPlan.scale(zoom, zoom); ctxPlan.translate(-cw/2, -ch/2);
             
-            ctxPlan.strokeStyle = '#cbd5e1'; ctxPlan.lineWidth = 1;
-            ctxPlan.strokeRect(dx, dy, L*scale, W*scale);
-            ctxPlan.strokeRect(dx + be_scale, dy + be_scale, (L - 2*be/1000)*scale, (W - 2*be/1000)*scale);
+            const scale = Math.min((cw-120)/r.L, (ch-120)/r.W);
+            const dx = (cw - r.L*scale)/2, dy = (ch - r.W*scale)/2;
 
-            // Reinforcement Mesh
-            if (showReinf) {
-                ctxPlan.strokeStyle = 'rgba(37, 99, 235, 0.15)';
-                ctxPlan.lineWidth = 0.5;
-                const s_m = reinfSpacing / 1000;
-                for(let x=0; x<=L; x+=s_m) {
-                    ctxPlan.beginPath(); ctxPlan.moveTo(dx + x*scale, dy); ctxPlan.lineTo(dx + x*scale, dy + W*scale); ctxPlan.stroke();
-                }
-                for(let y=0; y<=W; y+=s_m) {
-                    ctxPlan.beginPath(); ctxPlan.moveTo(dx, dy + y*scale); ctxPlan.lineTo(dx + L*scale, dy + y*scale); ctxPlan.stroke();
-                }
+            // Foundations
+            ctxPlan.fillStyle = '#e2e8f0'; ctxPlan.fillRect(dx, dy, r.L*scale, r.W*scale);
+            ctxPlan.fillStyle = '#f8fafc';
+            const beS = (r.be/1000)*scale;
+            ctxPlan.fillRect(dx+beS, dy+beS, (r.L-2*r.be/1000)*scale, (r.W-2*r.be/1000)*scale);
+            ctxPlan.strokeStyle = '#cbd5e1'; ctxPlan.lineWidth = 1;
+            ctxPlan.strokeRect(dx, dy, r.L*scale, r.W*scale);
+            ctxPlan.strokeRect(dx+beS, dy+beS, (r.L-2*r.be/1000)*scale, (r.W-2*r.be/1000)*scale);
+
+            // Mesh (Optimized: Single path)
+            if (document.getElementById('showReinf').checked) {
+                ctxPlan.beginPath(); ctxPlan.strokeStyle = 'rgba(37, 99, 235, 0.15)'; ctxPlan.lineWidth = 0.5;
+                const sm = r.spacing/1000;
+                for(let x=0; x<=r.L; x+=sm) { ctxPlan.moveTo(dx+x*scale, dy); ctxPlan.lineTo(dx+x*scale, dy+r.W*scale); }
+                for(let y=0; y<=r.W; y+=sm) { ctxPlan.moveTo(dx, dy+y*scale); ctxPlan.lineTo(dx+r.L*scale, dy+y*scale); }
+                ctxPlan.stroke();
             }
 
-            cols.forEach(c => {
-                const px = dx + c.x * scale, py = dy + c.y * scale;
-                ctxPlan.beginPath(); ctxPlan.arc(px, py, l*scale/1000, 0, Math.PI*2);
+            r.columns.forEach(c => {
+                const px = dx + c.x*scale, py = dy + c.y*scale;
+                ctxPlan.beginPath(); ctxPlan.arc(px, py, r.l*scale/1000, 0, 6.28);
                 ctxPlan.fillStyle = 'rgba(37, 99, 235, 0.05)'; ctxPlan.fill();
-                ctxPlan.strokeStyle = 'rgba(37, 99, 235, 0.2)'; ctxPlan.stroke();
                 if (c.h > 0) {
-                    ctxPlan.beginPath(); const dirY = c.y > W/2 ? -1 : 1; const aL = 30;
-                    ctxPlan.moveTo(px, py); ctxPlan.lineTo(px, py + dirY * aL);
-                    ctxPlan.strokeStyle = '#f59e0b'; ctxPlan.lineWidth = 2; ctxPlan.stroke();
-                    ctxPlan.beginPath(); ctxPlan.moveTo(px, py + dirY * aL); ctxPlan.lineTo(px - 4, py + dirY * (aL - 6)); ctxPlan.lineTo(px + 4, py + dirY * (aL - 6)); ctxPlan.fillStyle = '#f59e0b'; ctxPlan.fill();
+                    const dirY = c.y > r.W/2 ? -1 : 1; 
+                    ctxPlan.beginPath(); ctxPlan.strokeStyle = '#f59e0b'; ctxPlan.lineWidth = 2;
+                    ctxPlan.moveTo(px, py); ctxPlan.lineTo(px, py + dirY*30); ctxPlan.stroke();
                 }
-                ctxPlan.beginPath(); ctxPlan.arc(px, py, 6, 0, Math.PI*2); ctxPlan.fillStyle = '#0f172a'; ctxPlan.fill();
+                ctxPlan.beginPath(); ctxPlan.arc(px, py, 6, 0, 6.28); ctxPlan.fillStyle = '#0f172a'; ctxPlan.fill();
             });
-            drawDimensionLine(ctxPlan, dx, dy, dx + L*scale, dy, `${L}m`, -30);
-            drawDimensionLine(ctxPlan, dx, dy, dx, dy + W*scale, `${W}m`, -30);
             ctxPlan.restore();
         }
 
-        function drawElevation(hs, he, be, topNeeded, n_edge, db_edge, hairpinAs) {
-            eleCanvas.width = eleCanvas.offsetWidth; eleCanvas.height = eleCanvas.offsetHeight;
-            const cw = eleCanvas.width, ch = eleCanvas.height; ctxEle.clearRect(0,0,cw,ch);
-            const margin = 50, tW = be * 1.5, tH = he * 1.2, scale = Math.min((cw - margin * 2) / tW, (ch - margin * 2) / tH);
-            const middle = ch / 2 - (he * scale) / 4, startX = (cw - tW * scale) / 2;
+        function drawElevation() {
+            const r = lastResults; if (!r.hs) return;
+            const cw = eleCanvas.width = eleCanvas.offsetWidth, ch = eleCanvas.height = eleCanvas.offsetHeight;
+            ctxEle.clearRect(0,0,cw,ch);
+            const scale = Math.min((cw-100)/(r.be*1.5), (ch-100)/(r.he*1.2));
+            const mid = ch/2 - (r.he*scale)/4, sx = (cw - r.be*1.5*scale)/2;
+            const sh = r.hs*scale, eh = r.he*scale, eb = r.be*scale;
             ctxEle.fillStyle = '#f1f5f9'; ctxEle.strokeStyle = '#475569'; ctxEle.lineWidth = 2;
-            const slabH = hs * scale, edgeH = he * scale, edgeB = be * scale;
-            const x0 = startX, x1 = x0 + edgeB, x2 = x1 + edgeB/2, x3 = x0 + tW * scale;
-            ctxEle.beginPath(); ctxEle.moveTo(x0, middle - slabH/2); ctxEle.lineTo(x3, middle - slabH/2); ctxEle.lineTo(x3, middle + slabH/2); ctxEle.lineTo(x2, middle + slabH/2); ctxEle.lineTo(x1, middle + edgeH - slabH/2); ctxEle.lineTo(x0, middle + edgeH - slabH/2); ctxEle.closePath(); ctxEle.fill(); ctxEle.stroke();
-            if (hairpinAs > 0) { ctxEle.lineWidth = 2; ctxEle.strokeStyle = '#f59e0b'; ctxEle.setLineDash([4, 2]); ctxEle.beginPath(); ctxEle.moveTo(x0 + edgeB/2, middle - slabH/2 + 20); ctxEle.lineTo(x0 + edgeB/2, middle); ctxEle.lineTo(x3 - 20, middle); ctxEle.stroke(); ctxEle.setLineDash([]); ctxEle.fillStyle = '#f59e0b'; ctxEle.font = '10px Inter'; ctxEle.fillText('Tie Bar', x3 - 40, middle - 5); }
-            ctxEle.lineWidth = 3; ctxEle.strokeStyle = '#2563eb'; ctxEle.beginPath(); ctxEle.moveTo(x0 + 10, middle + slabH/2 - 8); ctxEle.lineTo(x3 - 10, middle + slabH/2 - 8); ctxEle.stroke();
-            ctxEle.fillStyle = '#2563eb'; for(let i=0; i<n_edge; i++) { ctxEle.beginPath(); ctxEle.arc(x0 + 25 + i*20, middle + edgeH - slabH/2 - 25, 4, 0, Math.PI*2); ctxEle.fill(); }
-            if (topNeeded) { ctxEle.strokeStyle = '#ef4444'; ctxEle.beginPath(); ctxEle.moveTo(x0 + 10, middle - slabH/2 + 8); ctxEle.lineTo(x3 - 10, middle - slabH/2 + 8); ctxEle.stroke(); }
-            drawDimensionLine(ctxEle, x3 + 10, middle - slabH/2, x3 + 10, middle + slabH/2, `${hs}mm`, 10);
-            drawDimensionLine(ctxEle, x0 - 10, middle - slabH/2, x0 - 10, middle + edgeH - slabH/2, `${he}mm`, -10);
-            drawDimensionLine(ctxEle, x0, middle + edgeH - slabH/2 + 10, x1, middle + edgeH - slabH/2 + 10, `${be}mm`, 10);
+            ctxEle.beginPath(); ctxEle.moveTo(sx, mid-sh/2); ctxEle.lineTo(sx+r.be*1.5*scale, mid-sh/2); ctxEle.lineTo(sx+r.be*1.5*scale, mid+sh/2); ctxEle.lineTo(sx+eb*1.2, mid+sh/2); ctxEle.lineTo(sx+eb, mid+eh-sh/2); ctxEle.lineTo(sx, mid+eh-sh/2); ctxEle.closePath(); ctxEle.fill(); ctxEle.stroke();
+            if (r.maxAsTie > 0) { ctxEle.strokeStyle = '#f59e0b'; ctxEle.setLineDash([4,2]); ctxEle.beginPath(); ctxEle.moveTo(sx+eb/2, mid-sh/2+20); ctxEle.lineTo(sx+eb/2, mid); ctxEle.lineTo(sx+r.be*1.5*scale-20, mid); ctxEle.stroke(); ctxEle.setLineDash([]); }
+            ctxEle.strokeStyle = '#2563eb'; ctxEle.lineWidth = 3; ctxEle.beginPath(); ctxEle.moveTo(sx+10, mid+sh/2-8); ctxEle.lineTo(sx+r.be*1.5*scale-10, mid+sh/2-8); ctxEle.stroke();
+            if (r.topNeeded) { ctxEle.strokeStyle = '#ef4444'; ctxEle.beginPath(); ctxEle.moveTo(sx+10, mid-sh/2+8); ctxEle.lineTo(sx+r.be*1.5*scale-10, mid-sh/2+8); ctxEle.stroke(); }
         }
 
         window.onload = () => {
-            const inputs = document.querySelectorAll('input, select');
-            inputs.forEach(input => input.addEventListener('input', calculate));
-            renderColumnList();
+            document.querySelectorAll('input, select').forEach(i => i.addEventListener('input', calculate));
             calculate();
         };
     </script>
