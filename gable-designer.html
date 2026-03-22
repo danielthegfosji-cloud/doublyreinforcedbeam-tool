@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steel Gable Frame Designer | SimpleCrete</title>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Fira+Code:wght@400&display=swap" rel="stylesheet">
+    <!-- MathJax -->
+    <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }
+    };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <!-- SheetJS for AISC Excel Parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #0f172a;
+            --accent: #2563eb;
+            --bg: #f8fafc;
+            --panel-bg: #ffffff;
+            --border: #e2e8f0;
+            --text-main: #1e293b;
+            --text-sub: #64748b;
+            --danger: #ef4444;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background-color: var(--primary);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+
+        .nav-left { display: flex; align-items: center; gap: 1rem; }
+        .back-btn {
+            background-color: rgba(255,255,255,0.1);
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .back-btn:hover { background-color: rgba(255,255,255,0.2); }
+        .nav-title { font-weight: 700; font-size: 1.1rem; }
+
+        .container {
+            display: grid;
+            grid-template-columns: 360px 1fr;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            max-width: 1500px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* --- LEFT PANEL --- */
+        .input-panel {
+            background: var(--panel-bg);
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+
+        .panel-header {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--primary);
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 0.4rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .input-group {
+            display: grid;
+            grid-template-columns: 1fr 80px;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 0.5rem;
+        }
+
+        .input-group label {
+            font-size: 0.8rem;
+            color: var(--text-sub);
+            font-weight: 600;
+        }
+
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 0.4rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            text-align: right;
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn-action:hover { opacity: 0.9; }
+
+        /* --- RIGHT PANEL --- */
+        .results-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .viz-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        canvas {
+            width: 100%;
+            height: 400px;
+            background: #fafafa;
+            border: 1px solid #eee;
+            border-radius: 8px;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+        }
+
+        .card-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-sub);
+            margin-bottom: 1rem;
+        }
+
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        .result-table td {
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .result-table td:last-child {
+            text-align: right;
+            font-weight: 700;
+            font-family: 'Fira Code', monospace;
+        }
+
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+        .status-success { background: #dcfce7; color: #166534; }
+        .status-danger { background: #fee2e2; color: #991b1b; }
+
+        .db-status {
+            font-size: 0.75rem;
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="index.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Suite</a>
+            <span class="nav-title"><i class="fa-solid fa-draw-polygon"></i> Steel Gable Designer</span>
+        </div>
+        <div style="font-size: 0.8rem; opacity: 0.8;">AISC 360-16 LRFD Engine v1.0</div>
+    </nav>
+
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="input-panel">
+            <div id="dbStatus" class="db-status" style="background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa;">
+                <i class="fa-solid fa-database"></i> Loading AISC Database...
+            </div>
+
+            <div>
+                <div class="panel-header">Frame Geometry</div>
+                <div class="input-group">
+                    <label>Span $L$ ($m$)</label>
+                    <input type="number" id="span_m" value="20" step="0.5">
+                </div>
+                <div class="input-group">
+                    <label>Eave Height $H_e$ ($m$)</label>
+                    <input type="number" id="eave_m" value="6" step="0.5">
+                </div>
+                <div class="input-group">
+                    <label>Roof Pitch ($^{\circ}$)</label>
+                    <input type="number" id="pitch_deg" value="15" step="1">
+                </div>
+                <div class="input-group">
+                    <label>Frame Spacing ($m$)</label>
+                    <input type="number" id="spacing_m" value="5" step="0.5">
+                </div>
+            </div>
+
+            <div>
+                <div class="panel-header">Member Selection</div>
+                <div class="input-group">
+                    <label>Column Section</label>
+                    <select id="col_section">
+                        <option value="W12X26">Loading...</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Rafter Section</label>
+                    <select id="raf_section">
+                        <option value="W12X26">Loading...</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <div class="panel-header">Loading (Service)</div>
+                <div class="input-group">
+                    <label>Dead Load ($kN/m^2$)</label>
+                    <input type="number" id="dl_kpa" value="0.5" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label>Live Load ($kN/m^2$)</label>
+                    <input type="number" id="ll_kpa" value="0.6" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label>Wind Speed ($m/s$)</label>
+                    <input type="number" id="wind_ms" value="45" step="1">
+                </div>
+            </div>
+
+            <button class="btn-action" onclick="analyzeFrame()">Analyze Frame</button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="results-panel">
+            <div class="viz-card">
+                <div class="card-title">Frame Visualization <span id="frameScale" style="font-size: 0.7rem; color: var(--text-sub);"></span></div>
+                <canvas id="frameCanvas"></canvas>
+            </div>
+
+            <div class="results-grid">
+                <div class="card">
+                    <div class="card-title">Reactions at Base</div>
+                    <div id="reactionResults"></div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Member Integrity</div>
+                    <div id="memberResults"></div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Design Summary</div>
+                    <div id="summaryResults"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let aiscDb = [];
+        const canvas = document.getElementById('frameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 1. Load AISC Database
+        async function loadAiscDb() {
+            try {
+                const response = await fetch('aisc-shapes-database-v160-2.xlsx');
+                const arrayBuffer = await response.arrayBuffer();
+                const data = new Uint8Array(arrayBuffer);
+                const workbook = XLSX.read(data, {type: 'array'});
+                
+                // Assuming first sheet contains the data
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                aiscDb = XLSX.utils.sheet_to_json(worksheet);
+                
+                populateSections();
+                document.getElementById('dbStatus').innerHTML = `<i class="fa-solid fa-check-circle"></i> AISC Database Loaded (${aiscDb.length} shapes)`;
+                document.getElementById('dbStatus').style.background = '#dcfce7';
+                document.getElementById('dbStatus').style.color = '#166534';
+                document.getElementById('dbStatus').style.borderColor = '#bbf7d0';
+                
+                analyzeFrame();
+            } catch (err) {
+                console.error("Error loading AISC DB:", err);
+                document.getElementById('dbStatus').innerHTML = `<i class="fa-solid fa-exclamation-triangle"></i> Failed to load database.`;
+                document.getElementById('dbStatus').style.background = '#fee2e2';
+                document.getElementById('dbStatus').style.color = '#991b1b';
+            }
+        }
+
+        function populateSections() {
+            const colSelect = document.getElementById('col_section');
+            const rafSelect = document.getElementById('raf_section');
+            
+            // Filter only W shapes for simplicity in this module
+            const wShapes = aiscDb.filter(s => s.Type === 'W');
+            
+            const options = wShapes.map(s => `<option value="${s.AISC_Manual_Label}">${s.AISC_Manual_Label}</option>`).join('');
+            colSelect.innerHTML = options;
+            rafSelect.innerHTML = options;
+            
+            // Set some common defaults if they exist
+            if (wShapes.find(s => s.AISC_Manual_Label === 'W12X26')) {
+                colSelect.value = 'W12X26';
+                rafSelect.value = 'W12X26';
+            }
+        }
+
+        function analyzeFrame() {
+            if (aiscDb.length === 0) return;
+
+            // 1. Geometry
+            const L = parseFloat(document.getElementById('span_m').value);
+            const He = parseFloat(document.getElementById('eave_m').value);
+            const pitch = parseFloat(document.getElementById('pitch_deg').value) * Math.PI / 180;
+            const spacing = parseFloat(document.getElementById('spacing_m').value);
+            
+            const peakH = He + (L/2) * Math.tan(pitch);
+
+            // 2. Loads
+            const dl = parseFloat(document.getElementById('dl_kpa').value);
+            const ll = parseFloat(document.getElementById('ll_kpa').value);
+            const wind = parseFloat(document.getElementById('wind_ms').value);
+            
+            // Factored vertical load (LRFD 1.2D + 1.6L)
+            const w_factored = (1.2 * dl + 1.6 * ll) * spacing; // kN/m
+            
+            // Simplified Reactions for a 3-hinged gable frame (Approximation)
+            // Vertical Reaction P (Total vertical load / 2)
+            const P_reaction = (w_factored * L) / 2; // kN
+            
+            // Horizontal Thrust H (kick-out)
+            // For a 3-hinged frame: H = (w * L^2) / (8 * PeakHeight)
+            const H_thrust = (w_factored * Math.pow(L, 2)) / (8 * peakH); // kN
+
+            // 3. Member Check (Simplified)
+            const colLabel = document.getElementById('col_section').value;
+            const rafLabel = document.getElementById('raf_section').value;
+            
+            const colShape = aiscDb.find(s => s.AISC_Manual_Label === colLabel);
+            const rafShape = aiscDb.find(s => s.AISC_Manual_Label === rafLabel);
+
+            // Simplified Stress Ratio (Axial + Bending)
+            // Moment in column base assumed pinned for base design, but peak moment at eave
+            const M_eave = H_thrust * He; // kNm
+            const ratio = checkMember(colShape, P_reaction, M_eave);
+
+            // 4. Render Results
+            renderReactions(P_reaction, H_thrust);
+            renderIntegrity(ratio);
+            renderSummary(L, He, peakH, colLabel, rafLabel);
+            drawFrame(L, He, peakH);
+        }
+
+        function checkMember(shape, P, M) {
+            // AISC 360-16 Simplified
+            const Ag = shape.A * 645.16; // sq inch to mm2
+            const Sx = shape.Sx * 16387.06; // inch3 to mm3
+            const Fy = 345; // MPa (Grade 50)
+            
+            const axialStress = (P * 1000) / Ag;
+            const bendingStress = (M * 1e6) / Sx;
+            
+            const ratio = (axialStress / (0.9 * Fy)) + (bendingStress / (0.9 * Fy));
+            return ratio;
+        }
+
+        function renderReactions(P, H) {
+            document.getElementById('reactionResults').innerHTML = `
+                <table class="result-table">
+                    <tr><td>Vertical $P_u$</td><td>${P.toFixed(1)} kN</td></tr>
+                    <tr><td>Horizontal $H_u$</td><td>${H.toFixed(1)} kN</td></tr>
+                    <tr><td>Moment $M_u$</td><td>0.0 kNm (Pinned)</td></tr>
+                </table>
+                <p style="font-size: 0.75rem; color: var(--text-sub); margin-top: 10px;">
+                    Note: These reactions should be used in the <b>Thickened Slab</b> module for foundation design.
+                </p>
+            `;
+        }
+
+        function renderIntegrity(ratio) {
+            const statusClass = ratio < 1.0 ? 'status-success' : 'status-danger';
+            const statusText = ratio < 1.0 ? 'PASSED' : 'FAILED';
+            document.getElementById('memberResults').innerHTML = `
+                <div style="margin-bottom: 1rem;"><span class="status-badge ${statusClass}">${statusText}</span></div>
+                <table class="result-table">
+                    <tr><td>Combined Stress Ratio</td><td>${(ratio * 100).toFixed(1)}%</td></tr>
+                    <tr><td>Limit State</td><td>LRFD AISC 360</td></tr>
+                </table>
+            `;
+        }
+
+        function renderSummary(L, He, Ph, col, raf) {
+            document.getElementById('summaryResults').innerHTML = `
+                <table class="result-table">
+                    <tr><td>Span</td><td>${L} m</td></tr>
+                    <tr><td>Eave Height</td><td>${He} m</td></tr>
+                    <tr><td>Peak Height</td><td>${Ph.toFixed(2)} m</td></tr>
+                    <tr><td>Col Section</td><td>${col}</td></tr>
+                    <tr><td>Raf Section</td><td>${raf}</td></tr>
+                </table>
+            `;
+        }
+
+        function drawFrame(L, He, Ph) {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            const cw = canvas.width;
+            const ch = canvas.height;
+            ctx.clearRect(0, 0, cw, ch);
+
+            const margin = 40;
+            const scale = Math.min((cw - margin * 2) / L, (ch - margin * 2) / Ph);
+            const dx = (cw - L * scale) / 2;
+            const dy = ch - margin;
+
+            ctx.strokeStyle = varColor('--primary');
+            ctx.lineWidth = 4;
+            ctx.lineJoin = 'round';
+
+            // Ground line
+            ctx.beginPath();
+            ctx.strokeStyle = varColor('--border');
+            ctx.moveTo(margin, dy);
+            ctx.lineTo(cw - margin, dy);
+            ctx.stroke();
+
+            // Frame Path
+            ctx.beginPath();
+            ctx.strokeStyle = varColor('--primary');
+            ctx.moveTo(dx, dy); // Base Left
+            ctx.lineTo(dx, dy - He * scale); // Eave Left
+            ctx.lineTo(dx + (L / 2) * scale, dy - Ph * scale); // Peak
+            ctx.lineTo(dx + L * scale, dy - He * scale); // Eave Right
+            ctx.lineTo(dx + L * scale, dy); // Base Right
+            ctx.stroke();
+
+            // Draw Base Supports (Pins)
+            drawPin(dx, dy);
+            drawPin(dx + L * scale, dy);
+        }
+
+        function drawPin(x, y) {
+            ctx.beginPath();
+            ctx.fillStyle = varColor('--text-sub');
+            ctx.moveTo(x, y);
+            ctx.lineTo(x - 8, y + 10);
+            ctx.lineTo(x + 8, y + 10);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function varColor(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
+
+        window.onload = loadAiscDb;
+    </script>
+</body>
+</html>
