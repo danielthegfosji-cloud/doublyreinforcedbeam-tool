@@ -450,11 +450,20 @@
             const L = parseFloat(document.getElementById('L_m').value) || 25;
             const W = parseFloat(document.getElementById('W_m').value) || 20;
             
+            // Heuristic to find pairs (same X, opposite Y)
+            const getPairIndex = (c, idx) => {
+                return columns.findIndex((other, oIdx) => oIdx !== idx && Math.abs(other.x - c.x) < 0.1 && Math.abs(other.y - (W - c.y)) < 5);
+            };
+
             list.innerHTML = columns.map((c, i) => {
                 const cond = getColumnCondition(c.x, c.y, L, W);
+                const pairIdx = getPairIndex(c, i);
+                const isPaired = pairIdx !== -1;
+                const pairLabel = isPaired ? `<span style="font-size:0.6rem; background:#dcfce7; padding:2px 4px; border-radius:4px; margin-left:4px;">Paired w/ Col ${pairIdx+1}</span>` : '';
+                
                 return `
-                <div class="col-item">
-                    <span>Col ${i+1}: (${c.x}, ${c.y}) - ${c.p}kN <strong style="color:var(--accent)">[${cond}]</strong></span>
+                <div class="col-item" style="${isPaired ? 'border-left: 3px solid var(--success);' : ''}">
+                    <span>Col ${i+1}: (${c.x}, ${c.y}) - ${c.p}kN / ${c.h}kN(H) <strong style="color:var(--accent)">[${cond}]</strong> ${pairLabel}</span>
                     <button style="color:red; border:none; background:none; cursor:pointer;" onclick="removeColumn(${i})">×</button>
                 </div>
             `}).join('');
@@ -600,24 +609,36 @@
             const ratioP = (VuP / phiVcP);
             const ratioOW = VuOW > 0 ? (VuOW / phiVcOW) : 0;
             
-            const status = (ratioP < 1.0 && ratioOW < 1.0) ? 
+            const pFailed = ratioP >= 1.0;
+            const owFailed = ratioOW >= 1.0;
+
+            const status = (!pFailed && !owFailed) ? 
                 `<span class="status-badge status-success">Shear OK</span>` : 
                 `<span class="status-badge status-danger">Shear Failure</span>`;
             
+            let recommendations = '';
+            if (pFailed) {
+                recommendations += `<p style="color:var(--danger); font-size:0.75rem; font-weight:700; margin-top:8px;">⚠️ Punching Failure: Increase slab thickness $h_s$ or concrete grade $f'_c$.</p>`;
+            }
+            if (owFailed) {
+                recommendations += `<p style="color:var(--danger); font-size:0.75rem; font-weight:700; margin-top:4px;">⚠️ One-Way Failure: Increase thickened edge depth $h_e$ or width $b_e$.</p>`;
+            }
+
             div.innerHTML = `
                 <div style="margin-bottom: 1rem;">${status}</div>
                 <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">PUNCHING (Worst Case: ${cond})</div>
                 <table class="result-table" style="margin-bottom: 10px;">
                     <tr><td>$V_u$</td><td>${(VuP/1000).toFixed(1)} kN</td></tr>
                     <tr><td>$\phi V_c$</td><td>${(phiVcP/1000).toFixed(1)} kN</td></tr>
-                    <tr><td>Ratio</td><td><strong>${(ratioP*100).toFixed(1)}%</strong></td></tr>
+                    <tr><td>Ratio</td><td><strong>${(ratioP*100).toFixed(1)}%</strong> ${pFailed ? '❌' : '✅'}</td></tr>
                 </table>
                 <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">ONE-WAY (Edge Beam)</div>
                 <table class="result-table">
                     <tr><td>$V_u$</td><td>${(VuOW/1000).toFixed(1)} kN</td></tr>
                     <tr><td>$\phi V_c$</td><td>${(phiVcOW/1000).toFixed(1)} kN</td></tr>
-                    <tr><td>Ratio</td><td><strong>${(ratioOW*100).toFixed(1)}%</strong></td></tr>
+                    <tr><td>Ratio</td><td><strong>${(ratioOW*100).toFixed(1)}%</strong> ${owFailed ? '❌' : '✅'}</td></tr>
                 </table>
+                ${recommendations}
             `;
             if (window.MathJax) MathJax.typesetPromise();
         }
@@ -733,21 +754,21 @@
                 ctxPlan.fillStyle = 'rgba(37, 99, 235, 0.05)'; ctxPlan.fill();
                 ctxPlan.strokeStyle = 'rgba(37, 99, 235, 0.2)'; ctxPlan.stroke();
                 
-                // Draw Thrust Vector
+                // Draw Thrust Vector (Point toward pair/opposite edge along Y axis)
                 if (c.h > 0) {
                     ctxPlan.beginPath();
-                    // Direction toward center roughly
-                    const dirX = c.x > L/2 ? -1 : 1;
+                    const dirY = c.y > W/2 ? -1 : 1; 
+                    const arrowLen = 30;
                     ctxPlan.moveTo(px, py);
-                    ctxPlan.lineTo(px + dirX * 25, py);
+                    ctxPlan.lineTo(px, py + dirY * arrowLen);
                     ctxPlan.strokeStyle = '#f59e0b';
                     ctxPlan.lineWidth = 2;
                     ctxPlan.stroke();
                     // Arrowhead
                     ctxPlan.beginPath();
-                    ctxPlan.moveTo(px + dirX * 25, py);
-                    ctxPlan.lineTo(px + dirX * 20, py - 4);
-                    ctxPlan.lineTo(px + dirX * 20, py + 4);
+                    ctxPlan.moveTo(px, py + dirY * arrowLen);
+                    ctxPlan.lineTo(px - 4, py + dirY * (arrowLen - 6));
+                    ctxPlan.lineTo(px + 4, py + dirY * (arrowLen - 6));
                     ctxPlan.fillStyle = '#f59e0b';
                     ctxPlan.fill();
                 }
