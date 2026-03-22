@@ -621,12 +621,16 @@
 
             const steelWeights = { 10: 0.617, 12: 0.888, 16: 1.58, 20: 2.47 };
             
-            // Mesh Steel & Spacing (ACI 7.12.2.2 limits)
-            const area_bar = (Math.PI * db**2) / 4;
-            const As_d = Math.max((maxMpos * 1.0) / (0.9 * fy * 0.9 * d), 0.0018 * 1000 * hs);
-            let spacing = (area_bar * 1000) / As_d;
-            // Limit spacing to min(5h, 450mm)
-            spacing = Math.floor(Math.min(450, 5 * hs, Math.max(75, spacing)) / 10) * 10;
+            // Mesh Steel & Spacing (ACI 10.5.4 via 10.5.1 Flexural Minimums)
+            const area_bar_mesh = (Math.PI * db**2) / 4;
+            const As_flex = (maxMpos * 1.0) / (0.9 * fy * 0.9 * d);
+            const As_min_flex = Math.max( (0.25 * Math.sqrt(fc) / fy) * 1000 * d, (1.4 / fy) * 1000 * d );
+            const As_d = Math.max(As_flex, As_min_flex, 0.0018 * 1000 * hs);
+            
+            let spacing_req = (area_bar_mesh * 1000) / As_d;
+            // Limit spacing to min(3h, 450mm) per ACI 10.5.4
+            let spacing = Math.floor(Math.min(450, 3 * hs, Math.max(75, spacing_req)) / 10) * 10;
+            const spacingMaxed = spacing < (spacing_req - 10);
 
             const n_layers = topNeeded ? 2 : 1;
             const meshLen = n_layers * ((L * (W / (spacing/1000) + 1)) + (W * (L / (spacing/1000) + 1)));
@@ -655,7 +659,7 @@
             const supportKg = n_supports * supportLen * steelWeights[10];
 
             // Cache for drawing
-            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge_req, db_tie, n_tie_legs, fy, totalVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, splice_edge, ldh_edge, ldh_mesh, supportKg };
+            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge_req, db_tie, n_tie_legs, fy, totalVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, splice_edge, ldh_edge, ldh_mesh, supportKg, spacingMaxed };
 
             // Update DOM
             renderResults();
@@ -680,7 +684,7 @@
             const rP = r.maxVuP / r.maxPhiVcP, rOW = r.maxVuOW > 0 ? r.maxVuOW / r.maxPhiVcOW : 0;
             const pF = rP >= 1, owF = rOW >= 1;
             document.getElementById('shearResults').innerHTML = `<div style="margin-bottom:1rem;" class="status-badge ${(!pF && !owF)?'status-success':'status-danger'}">${(!pF && !owF)?'Shear OK':'Shear Failure'}</div><div style="font-size:0.75rem; font-weight:700;">PUNCHING (${r.worstCond})</div><table class="result-table" style="margin-bottom:10px;"><tr><td>Ratio</td><td><strong>${(rP*100).toFixed(1)}%</strong> ${pF?'❌':'✅'}</td></tr></table><div style="font-size:0.75rem; font-weight:700;">ONE-WAY (Edge)</div><table class="result-table"><tr><td>Ratio</td><td><strong>${(rOW*100).toFixed(1)}%</strong> ${owF?'❌':'✅'}</td></tr></table>${pF?'<p style="color:red; font-size:0.75rem; font-weight:700;">⚠️ Punching Failure: Increase $h_s$ or $f\'_c$.</p>':''}${owF?'<p style="color:red; font-size:0.75rem; font-weight:700;">⚠️ One-Way Failure: Increase $h_e$ or $b_e$.</p>':''}`;
-            document.getElementById('reinfResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--accent); font-weight:700;">Slab Mesh</td></tr><tr><td>Size/Spacing</td><td>${r.db}mm @ ${r.spacing}mm</td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Edge Detailing</td></tr><tr><td>Longitudinal (Req.)</td><td><strong>${r.n_edge_req}-N${r.db_edge}</strong></td></tr><tr><td>Edge Bar Position</td><td>Bottom of Trench</td></tr><tr><td>Top Mesh?</td><td>${r.topNeeded?'YES':'NO'}</td></tr></table>`;
+            document.getElementById('reinfResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--accent); font-weight:700;">Slab Mesh</td></tr><tr><td>Size/Spacing</td><td>${r.db}mm @ ${r.spacing}mm</td></tr><tr><td>Std. Hook ($l_{dh}$)</td><td>${r.ldh_mesh.toFixed(0)} mm</td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Edge Detailing</td></tr><tr><td>Longitudinal (Req.)</td><td><strong>${r.n_edge_req}-N${r.db_edge}</strong></td></tr><tr><td>Edge Bar Position</td><td>Bottom of Trench</td></tr><tr><td>Lap Splice (Class B)</td><td><strong>${r.splice_edge.toFixed(0)} mm</strong></td></tr><tr><td>Std. Hook ($l_{dh}$)</td><td>${r.ldh_edge.toFixed(0)} mm</td></tr><tr><td>Top Mesh?</td><td>${r.topNeeded?'YES':'NO'}</td></tr></table>${r.spacingMaxed ? '<p style="color:var(--text-sub); font-size:0.75rem; margin-top:8px;"><i>Note: Mesh spacing governed by max code limits (3h or 450mm). Larger bars are inefficient here.</i></p>' : ''}`;
             document.getElementById('lateralGeotechResults').innerHTML = `<div class="status-badge ${r.maxQ <= r.q_allow ? 'status-success':'status-danger'}">${r.maxQ <= r.q_allow ? 'Bearing OK':'Bearing Failure'}</div><table class="result-table" style="margin-top:10px;"><tr><td>Applied $q$</td><td>${r.maxQ.toFixed(1)} kPa</td></tr><tr><td>Ratio</td><td><strong>${((r.maxQ/r.q_allow)*100).toFixed(1)}%</strong></td></tr></table><div style="font-size:0.75rem; font-weight:700; margin-top:10px;">GABLE THRUST</div><table class="result-table"><tr><td>Req. $A_s$</td><td>${r.maxAsTie.toFixed(0)} mm²</td></tr><tr><td>Detail</td><td><strong>${r.maxAsTie > 0 ? Math.ceil(r.n_tie_legs/2)+'-N'+r.db_tie+' U-Bars' : 'None'}</strong></td></tr></table>`;
             
             const totalKg = r.meshKg + r.edgeKg + r.tieKg;
@@ -781,9 +785,14 @@
             ctxEle.fillStyle = '#f1f5f9'; ctxEle.strokeStyle = '#475569'; ctxEle.lineWidth = 2;
             ctxEle.beginPath(); ctxEle.moveTo(sx, mid-sh/2); ctxEle.lineTo(sx+r.be*1.5*scale, mid-sh/2); ctxEle.lineTo(sx+r.be*1.5*scale, mid+sh/2); ctxEle.lineTo(sx+eb*1.2, mid+sh/2); ctxEle.lineTo(sx+eb, mid+eh-sh/2); ctxEle.lineTo(sx, mid+eh-sh/2); ctxEle.closePath(); ctxEle.fill(); ctxEle.stroke();
             
+            const clearCover = 50 * scale; 
+            
+            // Draw Support Tie (Ligature) Frame
+            ctxEle.strokeStyle = '#94a3b8'; ctxEle.lineWidth = 2;
+            ctxEle.strokeRect(sx + clearCover, mid + sh/2, eb - 2*clearCover, eh - sh - clearCover);
+
             // Draw Edge Longitudinal Bars (Bottom of Trench)
             ctxEle.fillStyle = '#2563eb';
-            const clearCover = 50 * scale; 
             const availableWidth = eb - 2 * clearCover;
             const barSpacing = r.n_edge_req > 1 ? availableWidth / (r.n_edge_req - 1) : 0;
 
