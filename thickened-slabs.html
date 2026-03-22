@@ -253,7 +253,7 @@
         </div>
         <div style="display: flex; align-items: center; gap: 1.5rem;">
             <a href="https://github.com/danielthegfosji-cloud/reinforcedConcrete" target="_blank" style="color: white; text-decoration: none; font-size: 0.9rem; opacity: 0.8;"><i class="fa-brands fa-github"></i> GitHub</a>
-            <div style="font-size: 0.8rem; opacity: 0.8;">Westergaard & ACI 318-11 v2.4</div>
+            <div style="font-size: 0.8rem; opacity: 0.8;">Westergaard & ACI 318-11 v2.5</div>
         </div>
     </nav>
 
@@ -549,6 +549,9 @@
             const n_edge = parseInt(document.getElementById('n_edge').value);
             const db_tie = parseFloat(document.getElementById('db_tie').value);
 
+            // Audit: Ensure all results variables are declared in scope
+            let edgeKg = 0, tieKg = 0, Mu_edge = 0, phiMn_edge = 0, n_edge_req = 0;
+
             renderColumnList();
 
             // Analysis
@@ -588,18 +591,18 @@
 
             // Edge Beam Calculation (ACI 10.5.1 Compliant)
             const edgeSpan = 5.0; // m (based on column spacing)
-            const Mu_edge = (maxVuP * edgeSpan) / (8 * 1000); 
+            Mu_edge = (maxVuP * edgeSpan) / (8 * 1000); 
             const As_edge_flex = (Mu_edge * 1e6) / (0.9 * fy * 0.9 * d_edge);
             
             // ACI 10.5.1 Beam Min Steel
             const As_min_beam = Math.max( (0.25 * Math.sqrt(fc) / fy) * be * d_edge, (1.4 / fy) * be * d_edge );
             const As_edge_req = Math.max(As_edge_flex, As_min_beam);
-            const n_edge_req = Math.max(2, Math.ceil(As_edge_req / ((Math.PI * db_edge**2) / 4)));
+            n_edge_req = Math.max(2, Math.ceil(As_edge_req / ((Math.PI * db_edge**2) / 4)));
 
             // Flexural Capacity Check
             const As_edge_user = n_edge * ((Math.PI * db_edge**2) / 4);
             const a_comp = (As_edge_user * fy) / (0.85 * fc * be);
-            const phiMn_edge = 0.9 * As_edge_user * fy * (d_edge - a_comp / 2) / 1e6; // kNm
+            phiMn_edge = 0.9 * As_edge_user * fy * (d_edge - a_comp / 2) / 1e6; // kNm
 
             // Material Summary Calculations
             const vol_slab = L * W * (hs / 1000);
@@ -618,6 +621,15 @@
             const n_layers = topNeeded ? 2 : 1;
             const meshLen = n_layers * ((L * (W / (spacing/1000) + 1)) + (W * (L / (spacing/1000) + 1)));
             const meshKg = meshLen * steelWeights[db];
+
+            // Edge Steel Weight
+            const edgeLen = 2 * (L + W) * n_edge;
+            edgeKg = edgeLen * steelWeights[db_edge];
+
+            // Tie Steel Weight (assume 3.5m per U-bar)
+            const n_cols_w_thrust = columns.filter(c => c.h > 0).length;
+            const tieLen = n_cols_w_thrust * Math.ceil(n_tie_legs/2) * 3.5;
+            tieKg = tieLen * steelWeights[db_tie];
 
             // Tension Development length (Simplified ld)
             const ld = (fy * db_edge) / (2.1 * Math.sqrt(fc)); 
@@ -650,7 +662,7 @@
             document.getElementById('shearResults').innerHTML = `<div style="margin-bottom:1rem;" class="status-badge ${(!pF && !owF)?'status-success':'status-danger'}">${(!pF && !owF)?'Shear OK':'Shear Failure'}</div><div style="font-size:0.75rem; font-weight:700;">PUNCHING (${r.worstCond})</div><table class="result-table" style="margin-bottom:10px;"><tr><td>Ratio</td><td><strong>${(rP*100).toFixed(1)}%</strong> ${pF?'❌':'✅'}</td></tr></table><div style="font-size:0.75rem; font-weight:700;">ONE-WAY (Edge)</div><table class="result-table"><tr><td>Ratio</td><td><strong>${(rOW*100).toFixed(1)}%</strong> ${owF?'❌':'✅'}</td></tr></table>${pF?'<p style="color:red; font-size:0.75rem; font-weight:700;">⚠️ Punching Failure: Increase $h_s$ or $f\'_c$.</p>':''}${owF?'<p style="color:red; font-size:0.75rem; font-weight:700;">⚠️ One-Way Failure: Increase $h_e$ or $b_e$.</p>':''}`;
             const edgeFailed = r.n_edge < r.n_edge_req;
 
-            document.getElementById('reinfResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--accent); font-weight:700;">Slab Mesh</td></tr><tr><td>Size/Spacing</td><td>${r.db}mm @ ${r.spacing}mm</td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Edge Detailing</td></tr><tr><td>Longitudinal (User)</td><td>${r.n_edge}-N${r.db_edge}</td></tr><tr><td>Longitudinal (Req.)</td><td><strong>${r.n_edge_req}-N${r.db_edge}</strong> ${edgeFailed?'❌':'✅'}</td></tr><tr><td>Edge Bar Position</td><td>Bottom of Trench</td></tr><tr><td>Top Mesh?</td><td>${r.topNeeded?'YES':'NO'}</td></tr></table>${edgeFailed?'<p style="color:red; font-size:0.75rem; font-weight:700; margin-top:8px;">⚠️ Insufficient Edge Steel: Provide at least '+r.n_edge_req+' bars.</p>':''}`;
+            document.getElementById('reinfResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--accent); font-weight:700;">Slab Mesh</td></tr><tr><td>Size/Spacing</td><td>${r.db}mm @ ${r.spacing}mm</td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Edge Detailing</td></tr><tr><td>Longitudinal (User)</td><td>${r.n_edge}-N${r.db_edge}</td></tr><tr><td>Longitudinal (Req.)</td><td><strong>${r.n_edge_req}-N${r.db_edge}</strong> ${edgeFailed?'❌':'✅'}</td></tr><tr><td>Edge Bar Position</td><td>Bottom of Trench</td></tr><tr><td>Top Mesh?</td><td>${r.topNeeded?'YES':'NO'}</td></tr></table>${edgeFailed?`<p style="color:red; font-size:0.75rem; font-weight:700; margin-top:8px;">⚠️ Insufficient Edge Steel: Provide at least ${r.n_edge_req} bars.</p>`:''}`;
             document.getElementById('lateralGeotechResults').innerHTML = `<div class="status-badge ${r.maxQ <= r.q_allow ? 'status-success':'status-danger'}">${r.maxQ <= r.q_allow ? 'Bearing OK':'Bearing Failure'}</div><table class="result-table" style="margin-top:10px;"><tr><td>Applied $q$</td><td>${r.maxQ.toFixed(1)} kPa</td></tr><tr><td>Ratio</td><td><strong>${((r.maxQ/r.q_allow)*100).toFixed(1)}%</strong></td></tr></table><div style="font-size:0.75rem; font-weight:700; margin-top:10px;">GABLE THRUST</div><table class="result-table"><tr><td>Req. $A_s$</td><td>${r.maxAsTie.toFixed(0)} mm²</td></tr><tr><td>Detail</td><td><strong>${r.maxAsTie > 0 ? Math.ceil(r.n_tie_legs/2)+'-N'+r.db_tie+' U-Bars' : 'None'}</strong></td></tr></table>`;
             
             const totalKg = r.meshKg + r.edgeKg + r.tieKg;
