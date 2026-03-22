@@ -749,11 +749,15 @@
             
             // Draw Edge Longitudinal Bars (Bottom of Trench)
             ctxEle.fillStyle = '#2563eb';
-            const cover = 50 * scale; 
+            const clearCover = 50 * scale; 
+            const availableWidth = eb - 2 * clearCover;
+            const barSpacing = r.n_edge > 1 ? availableWidth / (r.n_edge - 1) : 0;
+
             for(let i=0; i<r.n_edge; i++) {
                 ctxEle.beginPath();
-                const barOffX = cover + i * (40 * scale);
-                const barY = mid + eh - sh/2 - cover;
+                // If only 1 bar, place in center. Otherwise, distribute.
+                const barOffX = r.n_edge === 1 ? eb/2 : clearCover + i * barSpacing;
+                const barY = mid + eh - sh/2 - clearCover;
                 ctxEle.arc(sx + barOffX, barY, 5, 0, 6.28);
                 ctxEle.fill();
             }
