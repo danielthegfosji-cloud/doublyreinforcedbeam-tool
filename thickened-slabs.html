@@ -590,6 +590,14 @@
             const area_tie = (Math.PI * db_tie**2) / 4;
             const n_tie_legs = Math.ceil(maxAsTie / area_tie);
 
+            // Edge Beam Calculation (NEW)
+            const edgeSpan = 5.0; // m (based on column spacing)
+            const Mu_edge = (maxVuP * edgeSpan) / 8; // kNm (Simplified Beam Moment)
+            const As_edge_flex = (Mu_edge) / (0.9 * fy * 0.9 * d_edge);
+            const As_edge_min = Math.max(0.0018 * be * he, (1.4 / fy) * be * d_edge * 0.5); // Adjusted for wide footing
+            const As_edge_req = Math.max(As_edge_flex, As_edge_min);
+            const n_edge_req = Math.max(2, Math.ceil(As_edge_req / ((Math.PI * db_edge**2) / 4)));
+
             // Material Summary Calculations
             const vol_slab = L * W * (hs / 1000);
             const vol_edge = 2 * (L + W) * (be / 1000) * ((he - hs) / 1000);
@@ -626,9 +634,10 @@
             const rP = r.maxVuP / r.maxPhiVcP, rOW = r.maxVuOW > 0 ? r.maxVuOW / r.maxPhiVcOW : 0;
             const pF = rP >= 1, owF = rOW >= 1;
             document.getElementById('shearResults').innerHTML = `<div style="margin-bottom:1rem;" class="status-badge ${(!pF && !owF)?'status-success':'status-danger'}">${(!pF && !owF)?'Shear OK':'Shear Failure'}</div><div style="font-size:0.75rem; font-weight:700;">PUNCHING (${r.worstCond})</div><table class="result-table" style="margin-bottom:10px;"><tr><td>Ratio</td><td><strong>${(rP*100).toFixed(1)}%</strong> ${pF?'❌':'✅'}</td></tr></table><div style="font-size:0.75rem; font-weight:700;">ONE-WAY (Edge)</div><table class="result-table"><tr><td>Ratio</td><td><strong>${(rOW*100).toFixed(1)}%</strong> ${owF?'❌':'✅'}</td></tr></table>${pF?'<p style="color:red; font-size:0.75rem; font-weight:700;">⚠️ Punching Failure: Increase $h_s$ or $f\'_c$.</p>':''}${owF?'<p style="color:red; font-size:0.75rem; font-weight:700;">⚠️ One-Way Failure: Increase $h_e$ or $b_e$.</p>':''}`;
-            
-            document.getElementById('reinfResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--accent); font-weight:700;">Slab Mesh</td></tr><tr><td>Size/Spacing</td><td>${r.db}mm @ ${r.spacing}mm</td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Edge Detailing</td></tr><tr><td>Longitudinal</td><td>${r.n_edge}-${r.db_edge}mm bars</td></tr><tr><td>Edge Bar Position</td><td>Bottom of Trench</td></tr><tr><td>Top Mesh?</td><td>${r.topNeeded?'YES':'NO'}</td></tr></table>`;
-            
+            const owF = rOW >= 1;
+            const edgeFailed = r.n_edge < r.n_edge_req;
+
+            document.getElementById('reinfResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--accent); font-weight:700;">Slab Mesh</td></tr><tr><td>Size/Spacing</td><td>${r.db}mm @ ${r.spacing}mm</td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Edge Detailing</td></tr><tr><td>Longitudinal (User)</td><td>${r.n_edge}-N${r.db_edge}</td></tr><tr><td>Longitudinal (Req.)</td><td><strong>${r.n_edge_req}-N${r.db_edge}</strong> ${edgeFailed?'❌':'✅'}</td></tr><tr><td>Edge Bar Position</td><td>Bottom of Trench</td></tr><tr><td>Top Mesh?</td><td>${r.topNeeded?'YES':'NO'}</td></tr></table>${edgeFailed?'<p style="color:red; font-size:0.75rem; font-weight:700; margin-top:8px;">⚠️ Insufficient Edge Steel: Provide at least '+r.n_edge_req+' bars.</p>':''}`;
             document.getElementById('lateralGeotechResults').innerHTML = `<div class="status-badge ${r.maxQ <= r.q_allow ? 'status-success':'status-danger'}">${r.maxQ <= r.q_allow ? 'Bearing OK':'Bearing Failure'}</div><table class="result-table" style="margin-top:10px;"><tr><td>Applied $q$</td><td>${r.maxQ.toFixed(1)} kPa</td></tr><tr><td>Ratio</td><td><strong>${((r.maxQ/r.q_allow)*100).toFixed(1)}%</strong></td></tr></table><div style="font-size:0.75rem; font-weight:700; margin-top:10px;">GABLE THRUST</div><table class="result-table"><tr><td>Req. $A_s$</td><td>${r.maxAsTie.toFixed(0)} mm²</td></tr><tr><td>Detail</td><td><strong>${r.maxAsTie > 0 ? Math.ceil(r.n_tie_legs/2)+'-N'+r.db_tie+' U-Bars' : 'None'}</strong></td></tr></table>`;
             
             const totalKg = r.meshKg + r.edgeKg + r.tieKg;
