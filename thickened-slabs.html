@@ -591,11 +591,16 @@
 
             // Edge Beam Calculation (NEW)
             const edgeSpan = 5.0; // m (based on column spacing)
-            const Mu_edge = (maxVuP * edgeSpan) / 8; // kNm (Simplified Beam Moment)
-            const As_edge_flex = (Mu_edge) / (0.9 * fy * 0.9 * d_edge);
-            const As_edge_min = Math.max(0.0018 * be * he, (1.4 / fy) * be * d_edge * 0.5); // Adjusted for wide footing
+            const Mu_edge = (maxVuP * edgeSpan) / (8 * 1000); // kNm (Factored Beam Moment)
+            const As_edge_flex = (Mu_edge * 1e6) / (0.9 * fy * 0.9 * d_edge);
+            const As_edge_min = Math.max(0.0018 * be * he, (1.4 / fy) * be * d_edge * 0.5); 
             const As_edge_req = Math.max(As_edge_flex, As_edge_min);
             const n_edge_req = Math.max(2, Math.ceil(As_edge_req / ((Math.PI * db_edge**2) / 4)));
+
+            // Flexural Capacity Check
+            const As_edge_user = n_edge * ((Math.PI * db_edge**2) / 4);
+            const a_comp = (As_edge_user * fy) / (0.85 * fc * be);
+            const phiMn_edge = 0.9 * As_edge_user * fy * (d_edge - a_comp / 2) / 1e6; // kNm
 
             // Material Summary Calculations
             const vol_slab = L * W * (hs / 1000);
@@ -628,7 +633,18 @@
 
         function renderResults() {
             const r = lastResults;
-            document.getElementById('flexResults').innerHTML = `<div class="calc-step"><b>Rad. Stiffness:</b> ${r.l.toFixed(1)} mm</div><div class="calc-step"><b>Max $M_u^+$:</b> ${(r.maxMpos/1000).toFixed(2)} kNm/m</div><div class="calc-step"><b>Max $|M_u^-|$:</b> ${(r.maxMneg/1000).toFixed(2)} kNm/m</div><div class="calc-step"><b>Cracking $M_{cr}$:</b> ${(r.Mcr/1000).toFixed(2)} kNm/m</div>`;
+            const flexRatio = (r.Mu_edge / r.phiMn_edge);
+            const flexStatus = flexRatio < 1.0 ? '<span class="status-badge status-success">Flexure OK</span>' : '<span class="status-badge status-danger">Flexure Fail</span>';
+
+            document.getElementById('flexResults').innerHTML = `
+                <div style="margin-bottom:10px;">${flexStatus}</div>
+                <div class="calc-step"><b>Edge Beam Demand ($M_u$):</b> ${r.Mu_edge.toFixed(1)} kNm</div>
+                <div class="calc-step"><b>Edge Beam Capacity ($\phi M_n$):</b> ${r.phiMn_edge.toFixed(1)} kNm</div>
+                <div class="calc-step"><b>Utilization Ratio:</b> <strong>${(flexRatio * 100).toFixed(1)}%</strong></div>
+                <hr style="margin:10px 0; border:0; border-top:1px solid #eee;">
+                <div class="calc-step"><b>Slab $M_{cr}$:</b> ${(r.Mcr/1000).toFixed(2)} kNm/m</div>
+                <div class="calc-step"><b>Rad. Stiffness ($l$):</b> ${r.l.toFixed(1)} mm</div>
+            `;
             
             const rP = r.maxVuP / r.maxPhiVcP, rOW = r.maxVuOW > 0 ? r.maxVuOW / r.maxPhiVcOW : 0;
             const pF = rP >= 1, owF = rOW >= 1;
