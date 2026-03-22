@@ -695,14 +695,14 @@
                         const hL = (1.5) * scale;
                         
                         if (cond === "Corner") {
-                            // Point 45 deg toward center
+                            // Point 45 deg toward center - Bend at column, legs into slab
                             ctxPlan.save();
                             ctxPlan.translate(px, py);
                             ctxPlan.rotate(Math.atan2(dirY, dirX));
-                            ctxPlan.moveTo(0, -10);
-                            ctxPlan.lineTo(hL, -10);
-                            ctxPlan.lineTo(hL, 10);
+                            ctxPlan.moveTo(hL, -10);
+                            ctxPlan.lineTo(0, -10);
                             ctxPlan.lineTo(0, 10);
+                            ctxPlan.lineTo(hL, 10);
                             ctxPlan.stroke();
                             ctxPlan.restore();
                         } else {
