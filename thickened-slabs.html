@@ -641,11 +641,15 @@
             const tieLen = n_cols_w_thrust * Math.ceil(n_tie_legs/2) * 3.5;
             tieKg = tieLen * steelWeights[db_tie];
 
-            // Tension Development length (Simplified ld)
-            const ld = (fy * db_edge) / (2.1 * Math.sqrt(fc)); 
+            // Tension Development & Splice (ACI 12.2 / 12.15)
+            const ld_edge = (fy * db_edge) / (2.1 * Math.sqrt(fc)); 
+            const splice_edge = Math.max(300, 1.3 * ld_edge); // Class B
+            
+            const ldh_edge = (0.24 * fy * db_edge) / Math.sqrt(fc); // 90-deg hook
+            const ldh_mesh = (0.24 * fy * db) / Math.sqrt(fc);
 
             // Cache for drawing
-            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge_req, db_tie, n_tie_legs, fy, totalVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, ld };
+            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge_req, db_tie, n_tie_legs, fy, totalVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, splice_edge, ldh_edge, ldh_mesh };
 
             // Update DOM
             renderResults();
