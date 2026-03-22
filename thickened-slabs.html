@@ -561,8 +561,12 @@
             const db_edge = parseFloat(document.getElementById('db_edge').value);
             const db_tie = parseFloat(document.getElementById('db_tie').value);
 
+            // Structural Scheme Logic
+            const struct_scheme = document.getElementById('struct_scheme').value;
+
             // Audit: Ensure all results variables are declared in scope
-            let edgeKg = 0, tieKg = 0, Mu_edge = 0, phiMn_edge = 0, n_edge_req = 0;
+            let edgeKg = 0, tieKg = 0, Mu_edge = 0, phiMn_edge = 0, n_edge_req = 0, ld = 0;
+            let tieBeamBars = 0, tieBeamConcVol = 0, tieBeamSteelKg = 0;
 
             renderColumnList();
 
