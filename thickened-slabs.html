@@ -680,12 +680,14 @@
             ctxEle.fillStyle = '#f1f5f9'; ctxEle.strokeStyle = '#475569'; ctxEle.lineWidth = 2;
             ctxEle.beginPath(); ctxEle.moveTo(sx, mid-sh/2); ctxEle.lineTo(sx+r.be*1.5*scale, mid-sh/2); ctxEle.lineTo(sx+r.be*1.5*scale, mid+sh/2); ctxEle.lineTo(sx+eb*1.2, mid+sh/2); ctxEle.lineTo(sx+eb, mid+eh-sh/2); ctxEle.lineTo(sx, mid+eh-sh/2); ctxEle.closePath(); ctxEle.fill(); ctxEle.stroke();
             
-            // Draw Edge Longitudinal Bars (Bottom)
+            // Draw Edge Longitudinal Bars (Bottom of Trench)
             ctxEle.fillStyle = '#2563eb';
+            const cover = 50 * scale; 
             for(let i=0; i<r.n_edge; i++) {
                 ctxEle.beginPath();
-                const barOffX = 30 + i * 20;
-                ctxEle.arc(sx + barOffX, mid + eh - sh/2 - 30, 4, 0, 6.28);
+                const barOffX = cover + i * (40 * scale);
+                const barY = mid + eh - sh/2 - cover;
+                ctxEle.arc(sx + barOffX, barY, 5, 0, 6.28);
                 ctxEle.fill();
             }
             
