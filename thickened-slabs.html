@@ -296,10 +296,14 @@
             </div>
 
             <div>
-                <div class="panel-header">Materials & Steel</div>
+                <div class="panel-header">Subgrade & Materials</div>
                 <div class="input-group">
                     <label class="hint-label" title="Measures subgrade stiffness. Typical: 15k-30k (clay), 40k-80k (dense sand).">Reaction $k$ ($kN/m^3$)</label>
                     <input type="number" id="k_sub" value="30000" step="5000">
+                </div>
+                <div class="input-group">
+                    <label class="hint-label" title="Maximum safe bearing pressure for the soil.">Allow. Bearing $q_{allow}$ ($kPa$)</label>
+                    <input type="number" id="q_allow" value="100" step="10">
                 </div>
                 <div class="input-group">
                     <label class="hint-label" title="Concrete compressive strength. Typical: 20 - 30 MPa.">Concrete $f'_c$ ($MPa$)</label>
@@ -308,6 +312,10 @@
                 <div class="input-group">
                     <label>Steel $f_y$ ($MPa$)</label>
                     <input type="number" id="fy" value="420" step="10">
+                </div>
+                <div class="input-group">
+                    <label class="hint-label" title="Friction coefficient between concrete and subgrade/vapor barrier.">Friction $\mu$</label>
+                    <input type="number" id="mu" value="0.4" step="0.05">
                 </div>
                 <div class="input-group">
                     <label>Mesh Bar Size ($mm$)</label>
@@ -347,6 +355,10 @@
                         <label>Service Load $P$ ($kN$)</label>
                         <input type="number" id="colP" value="76" step="1">
                     </div>
+                    <div class="input-group">
+                        <label class="hint-label" title="Horizontal force pushing outward at the column base.">Lateral Thrust $H$ ($kN$)</label>
+                        <input type="number" id="colH" value="30" step="1">
+                    </div>
                     <button class="btn-add" onclick="addColumn()">Add Column</button>
                 </div>
             </div>
@@ -380,14 +392,18 @@
                     <div class="panel-header" style="border-bottom-color: var(--text-sub);">Reinforcement Detailing</div>
                     <div id="reinfResults"></div>
                 </div>
+                <div class="card">
+                    <div class="panel-header" style="border-bottom-color: var(--text-sub);">Lateral Ties & Geotech</div>
+                    <div id="lateralGeotechResults"></div>
+                </div>
             </div>
         </main>
     </div>
 
     <script>
         let columns = [
-            {x: 0, y: 0, p: 76}, {x: 5, y: 0, p: 76}, {x: 10, y: 0, p: 76}, {x: 15, y: 0, p: 76}, {x: 20, y: 0, p: 76}, {x: 25, y: 0, p: 76},
-            {x: 0, y: 20, p: 76}, {x: 5, y: 20, p: 76}, {x: 10, y: 20, p: 76}, {x: 15, y: 20, p: 76}, {x: 20, y: 20, p: 76}, {x: 25, y: 20, p: 76}
+            {x: 0, y: 0, p: 76, h: 30}, {x: 5, y: 0, p: 76, h: 30}, {x: 10, y: 0, p: 76, h: 30}, {x: 15, y: 0, p: 76, h: 30}, {x: 20, y: 0, p: 76, h: 30}, {x: 25, y: 0, p: 76, h: 30},
+            {x: 0, y: 20, p: 76, h: 30}, {x: 5, y: 20, p: 76, h: 30}, {x: 10, y: 20, p: 76, h: 30}, {x: 15, y: 20, p: 76, h: 30}, {x: 20, y: 20, p: 76, h: 30}, {x: 25, y: 20, p: 76, h: 30}
         ];
         const planCanvas = document.getElementById('planCanvas');
         const eleCanvas = document.getElementById('eleCanvas');
@@ -406,7 +422,8 @@
             const x = parseFloat(document.getElementById('colX').value);
             const y = parseFloat(document.getElementById('colY').value);
             const p = parseFloat(document.getElementById('colP').value);
-            if (isNaN(x) || isNaN(y) || isNaN(p)) return;
+            const h = parseFloat(document.getElementById('colH').value);
+            if (isNaN(x) || isNaN(y) || isNaN(p) || isNaN(h)) return;
 
             // Check for overlapping columns
             for (let c of columns) {
@@ -452,8 +469,10 @@
             const be = parseFloat(document.getElementById('be_mm').value);
             const col_c = parseFloat(document.getElementById('col_c').value);
             const k = parseFloat(document.getElementById('k_sub').value); // kN/m3
+            const q_allow = parseFloat(document.getElementById('q_allow').value); // kPa
             const fc = parseFloat(document.getElementById('fc').value);
             const fy = parseFloat(document.getElementById('fy').value);
+            const mu = parseFloat(document.getElementById('mu').value);
             const db = parseFloat(document.getElementById('db_mm').value);
             const db_edge = parseFloat(document.getElementById('db_edge').value);
             const n_edge = parseInt(document.getElementById('n_edge').value);
@@ -464,6 +483,7 @@
             const E = 4700 * Math.sqrt(fc); // MPa
             const Poisson = 0.15;
             const phi_shear = 0.75;
+            const phi_tension = 0.90;
             const d = hs - 40; // Approx effective depth for slab
             const d_edge = he - 50; // Approx effective depth for edge beam
             
@@ -478,6 +498,10 @@
             let maxVuOneWay = 0;
             let maxPhiVcOneWay = 0;
             let worstPunchingCond = "Interior";
+            
+            let maxBearingQ = 0;
+            let maxHairpinAs = 0;
+            let worstHairpinNetH = 0;
 
             columns.forEach(col => {
                 const P_N = col.p * 1000 * 1.5; // Factored load
@@ -515,13 +539,32 @@
                     worstPunchingCond = condition;
                 }
 
-                // One-Way Shear (if near edge)
+                // One-Way Shear & Bearing (if near edge)
                 if (condition !== "Interior") {
                     const VuOneWay = P_N / 2; // Simplified: Half load to edge beam
                     const phiVcOneWay = phi_shear * 0.17 * Math.sqrt(fc) * be * d_edge;
                     if (VuOneWay > maxVuOneWay) {
                         maxVuOneWay = VuOneWay;
                         maxPhiVcOneWay = phiVcOneWay;
+                    }
+                    
+                    // Geotechnical Bearing
+                    // Effective length assumption: be + 2*he
+                    const eff_length = be + 2 * he;
+                    const bearing_area_m2 = (be / 1000) * (eff_length / 1000);
+                    const q_applied = col.p / bearing_area_m2; // Service load / area -> kPa
+                    if (q_applied > maxBearingQ) maxBearingQ = q_applied;
+                }
+                
+                // Lateral Thrust & Hairpin
+                if (col.h > 0) {
+                    const dead_load_approx = col.p / 1.5;
+                    const friction_res = mu * dead_load_approx;
+                    const net_thrust = Math.max(0, col.h * 1.5 - friction_res); // Factored thrust
+                    
+                    if (net_thrust > worstHairpinNetH) {
+                        worstHairpinNetH = net_thrust;
+                        maxHairpinAs = (net_thrust * 1000) / (phi_tension * fy); // mm2
                     }
                 }
             });
@@ -536,8 +579,9 @@
             renderFlexResults(l, maxMpos, maxMneg, Mcr);
             renderShearResults(maxVuPunching, maxPhiVcPunching, worstPunchingCond, maxVuOneWay, maxPhiVcOneWay);
             renderReinfResults(topBarNeeded, hs, maxMpos, fy, db, db_edge, n_edge);
+            renderLateralGeotechResults(maxBearingQ, q_allow, maxHairpinAs, worstHairpinNetH);
             drawPlan(L, W, l, columns);
-            drawElevation(hs, he, be, topBarNeeded, n_edge, db_edge);
+            drawElevation(hs, he, be, topBarNeeded, n_edge, db_edge, maxHairpinAs);
         }
 
         function renderFlexResults(l, Mpos, Mneg, Mcr) {
@@ -605,6 +649,42 @@
             `;
         }
 
+        function renderLateralGeotechResults(maxBearingQ, q_allow, maxHairpinAs, worstHairpinNetH) {
+            const div = document.getElementById('lateralGeotechResults');
+            const bearingStatus = maxBearingQ <= q_allow ? 
+                `<span class="status-badge status-success">Bearing OK</span>` : 
+                `<span class="status-badge status-danger">Bearing Failure</span>`;
+                
+            let tieStatus = "None Req.";
+            let tieDetail = "Friction resists thrust.";
+            
+            if (maxHairpinAs > 0) {
+                tieStatus = `<span class="status-badge status-warning">Ties Required</span>`;
+                // Assume N16 or N20 bars for ties
+                const area16 = Math.PI * Math.pow(16, 2) / 4;
+                const legs = Math.ceil(maxHairpinAs / area16);
+                tieDetail = `Provide ${legs}-N16 legs (U-bar)`;
+            }
+
+            div.innerHTML = `
+                <div style="margin-bottom: 1rem;">${bearingStatus}</div>
+                <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">GEOTECHNICAL (Edge Load)</div>
+                <table class="result-table" style="margin-bottom: 10px;">
+                    <tr><td>Applied $q$</td><td>${maxBearingQ.toFixed(1)} kPa</td></tr>
+                    <tr><td>Allowable $q_{allow}$</td><td>${q_allow.toFixed(1)} kPa</td></tr>
+                    <tr><td>Ratio</td><td><strong>${((maxBearingQ/q_allow)*100).toFixed(1)}%</strong></td></tr>
+                </table>
+                <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">GABLE THRUST TIES</div>
+                <div style="margin-bottom: 5px;">${tieStatus}</div>
+                <table class="result-table">
+                    <tr><td>Net Factored Thrust</td><td>${worstHairpinNetH.toFixed(1)} kN</td></tr>
+                    <tr><td>Req. Tie Area $A_s$</td><td>${maxHairpinAs.toFixed(0)} mm²</td></tr>
+                    <tr><td>Detail</td><td><strong>${tieDetail}</strong></td></tr>
+                </table>
+            `;
+            if (window.MathJax) MathJax.typesetPromise();
+        }
+
         function drawDimensionLine(ctx, x1, y1, x2, y2, text, offset = 30) {
             const isHorizontal = Math.abs(y1 - y2) < 2;
             const dash = [5, 5];
@@ -652,6 +732,26 @@
                 ctxPlan.beginPath(); ctxPlan.arc(px, py, l*scale/1000, 0, Math.PI*2);
                 ctxPlan.fillStyle = 'rgba(37, 99, 235, 0.05)'; ctxPlan.fill();
                 ctxPlan.strokeStyle = 'rgba(37, 99, 235, 0.2)'; ctxPlan.stroke();
+                
+                // Draw Thrust Vector
+                if (c.h > 0) {
+                    ctxPlan.beginPath();
+                    // Direction toward center roughly
+                    const dirX = c.x > L/2 ? -1 : 1;
+                    ctxPlan.moveTo(px, py);
+                    ctxPlan.lineTo(px + dirX * 25, py);
+                    ctxPlan.strokeStyle = '#f59e0b';
+                    ctxPlan.lineWidth = 2;
+                    ctxPlan.stroke();
+                    // Arrowhead
+                    ctxPlan.beginPath();
+                    ctxPlan.moveTo(px + dirX * 25, py);
+                    ctxPlan.lineTo(px + dirX * 20, py - 4);
+                    ctxPlan.lineTo(px + dirX * 20, py + 4);
+                    ctxPlan.fillStyle = '#f59e0b';
+                    ctxPlan.fill();
+                }
+
                 ctxPlan.beginPath(); ctxPlan.arc(px, py, 6, 0, Math.PI*2);
                 ctxPlan.fillStyle = '#0f172a'; ctxPlan.fill();
             });
@@ -659,7 +759,7 @@
             drawDimensionLine(ctxPlan, dx, dy, dx, dy + W*scale, `${W}m`, -30);
         }
 
-        function drawElevation(hs, he, be, topNeeded, n_edge, db_edge) {
+        function drawElevation(hs, he, be, topNeeded, n_edge, db_edge, hairpinAs) {
             eleCanvas.width = eleCanvas.offsetWidth;
             eleCanvas.height = eleCanvas.offsetHeight;
             const cw = eleCanvas.width;
@@ -684,6 +784,24 @@
             ctxEle.lineTo(x3, middle + slabH/2); ctxEle.lineTo(x2, middle + slabH/2);
             ctxEle.lineTo(x1, middle + edgeH - slabH/2); ctxEle.lineTo(x0, middle + edgeH - slabH/2);
             ctxEle.closePath(); ctxEle.fill(); ctxEle.stroke();
+            
+            // Base Friction/Thrust indicator
+            if (hairpinAs > 0) {
+                // Hairpin Tie
+                ctxEle.lineWidth = 2;
+                ctxEle.strokeStyle = '#f59e0b';
+                ctxEle.setLineDash([4, 2]);
+                ctxEle.beginPath();
+                ctxEle.moveTo(x0 + edgeB/2, middle - slabH/2 + 20); // From anchor bolt area
+                ctxEle.lineTo(x0 + edgeB/2, middle); // Down
+                ctxEle.lineTo(x3 - 20, middle); // Across into slab
+                ctxEle.stroke();
+                ctxEle.setLineDash([]);
+                ctxEle.fillStyle = '#f59e0b';
+                ctxEle.font = '10px Inter';
+                ctxEle.fillText('Tie Bar', x3 - 40, middle - 5);
+            }
+
             // Bars
             ctxEle.lineWidth = 3;
             ctxEle.strokeStyle = '#2563eb';
