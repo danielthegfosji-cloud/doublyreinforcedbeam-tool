@@ -582,9 +582,6 @@
 
             const Mcr = (0.62 * Math.sqrt(fc) * (1000 * hs**2 / 6)) / 1000;
             const topNeeded = Math.abs(maxMneg) > Mcr;
-            const area_bar = (Math.PI * db**2) / 4;
-            const As_d = Math.max((maxMpos * 1.0) / (0.9 * fy * 0.9 * d), 0.0018 * 1000 * hs);
-            let spacing = Math.floor(Math.min(450, Math.max(75, (area_bar * 1000) / As_d)) / 10) * 10;
 
             const area_tie = (Math.PI * db_tie**2) / 4;
             const n_tie_legs = Math.ceil(maxAsTie / area_tie);
@@ -598,6 +595,11 @@
             const As_min_beam = Math.max( (0.25 * Math.sqrt(fc) / fy) * be * d_edge, (1.4 / fy) * be * d_edge );
             const As_edge_req = Math.max(As_edge_flex, As_min_beam);
             const n_edge_req = Math.max(2, Math.ceil(As_edge_req / ((Math.PI * db_edge**2) / 4)));
+
+            // Flexural Capacity Check
+            const As_edge_user = n_edge * ((Math.PI * db_edge**2) / 4);
+            const a_comp = (As_edge_user * fy) / (0.85 * fc * be);
+            const phiMn_edge = 0.9 * As_edge_user * fy * (d_edge - a_comp / 2) / 1e6; // kNm
 
             // Material Summary Calculations
             const vol_slab = L * W * (hs / 1000);
