@@ -253,7 +253,7 @@
         </div>
         <div style="display: flex; align-items: center; gap: 1.5rem;">
             <a href="https://github.com/danielthegfosji-cloud/reinforcedConcrete" target="_blank" style="color: white; text-decoration: none; font-size: 0.9rem; opacity: 0.8;"><i class="fa-brands fa-github"></i> GitHub</a>
-            <div style="font-size: 0.8rem; opacity: 0.8;">Westergaard & ACI 318-11 v2.6</div>
+            <div style="font-size: 0.8rem; opacity: 0.8;">Westergaard & ACI 318-11 v2.7</div>
         </div>
     </nav>
 
@@ -659,6 +659,33 @@
             let governClause = "Shrinkage & Temp";
             if (As_flex_mesh >= As_min_flex_mesh && As_flex_mesh >= As_shrink_mesh) governClause = "Flexural Demand";
             else if (As_min_flex_mesh >= As_shrink_mesh) governClause = "Beam Min (ACI 10.5.1)";
+
+            // Tie Beam Scheme Logic
+            let numTieBeams = 0;
+            if (struct_scheme === 'tie_beams') {
+                As_d = 0.0018 * 1000 * hs;
+                governClause = "Tie Beam Scheme (Shrinkage Min)";
+
+                const processedIndices = new Set();
+                columns.forEach((c, idx) => {
+                    if (processedIndices.has(idx)) return;
+                    // Find pair across span W (same X, opposite Y)
+                    const pIdx = columns.findIndex((other, oIdx) => 
+                        oIdx !== idx && 
+                        !processedIndices.has(oIdx) &&
+                        Math.abs(other.x - c.x) < 0.1 && 
+                        Math.abs(other.y - (W - c.y)) < 2.0
+                    );
+                    if (pIdx !== -1) {
+                        numTieBeams++;
+                        processedIndices.add(idx);
+                        processedIndices.add(pIdx);
+                    }
+                });
+                tieBeamBars = numTieBeams > 0 ? 4 : 0;
+                tieBeamConcVol = numTieBeams * (W * 0.3 * (he - hs) / 1000); // 300mm width
+                tieBeamSteelKg = numTieBeams * (W * 4 * 1.58); // 4-N16
+            }
             
             let spacing_req = (area_bar_mesh * 1000) / As_d;
             // Limit spacing to min(3h, 450mm) per ACI 10.5.4
@@ -718,11 +745,10 @@
             const rP = r.maxVuP / r.maxPhiVcP, rOW = r.maxVuOW > 0 ? r.maxVuOW / r.maxPhiVcOW : 0;
             const pF = rP >= 1, owF = rOW >= 1;
             document.getElementById('shearResults').innerHTML = `<div style="margin-bottom:1rem;" class="status-badge ${(!pF && !owF)?'status-success':'status-danger'}">${(!pF && !owF)?'Shear OK':'Shear Failure'}</div><div style="font-size:0.75rem; font-weight:700;">PUNCHING (${r.worstCond})</div><table class="result-table" style="margin-bottom:10px;"><tr><td>Ratio</td><td><strong>${(rP*100).toFixed(1)}%</strong> ${pF?'❌':'✅'}</td></tr></table><div style="font-size:0.75rem; font-weight:700;">ONE-WAY (Edge)</div><table class="result-table"><tr><td>Ratio</td><td><strong>${(rOW*100).toFixed(1)}%</strong> ${owF?'❌':'✅'}</td></tr></table>${pF?'<p style="color:red; font-size:0.75rem; font-weight:700;">⚠️ Punching Failure: Increase $h_s$ or $f\'_c$.</p>':''}${owF?'<p style="color:red; font-size:0.75rem; font-weight:700;">⚠️ One-Way Failure: Increase $h_e$ or $b_e$.</p>':''}`;
-            document.getElementById('reinfResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--accent); font-weight:700;">Slab Mesh</td></tr><tr><td>Size/Spacing</td><td>${r.db}mm @ ${r.spacing}mm</td></tr><tr><td>Std. Hook ($l_{dh}$)</td><td>${r.ldh_mesh.toFixed(0)} mm</td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Theoretical $A_s$ (mm²/m)</td></tr><tr><td>Flexural Demand</td><td>${r.As_flex_mesh.toFixed(0)}</td></tr><tr><td>Flexural Minimum</td><td>${r.As_min_flex_mesh.toFixed(0)}</td></tr><tr><td>Shrinkage & Temp</td><td>${r.As_shrink_mesh.toFixed(0)}</td></tr><tr><td>Governing Factor</td><td style="color:var(--accent)">${r.governClause}</td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Edge Detailing</td></tr><tr><td>Longitudinal (Req.)</td><td><strong>${r.n_edge_req}-N${r.db_edge}</strong></td></tr><tr><td>Edge Bar Position</td><td>Bottom of Trench</td></tr><tr><td>Lap Splice (Class B)</td><td><strong>${r.splice_edge.toFixed(0)} mm</strong></td></tr><tr><td>Std. Hook ($l_{dh}$)</td><td>${r.ldh_edge.toFixed(0)} mm</td></tr><tr><td>Top Mesh?</td><td>${r.topNeeded?'YES':'NO'}</td></tr></table>${r.spacingMaxed ? '<p style="color:var(--text-sub); font-size:0.75rem; margin-top:8px;"><i>Note: Mesh spacing governed by max code limits (3h or 450mm). Larger bars are inefficient here.</i></p>' : ''}`;
-            document.getElementById('lateralGeotechResults').innerHTML = `<div class="status-badge ${r.maxQ <= r.q_allow ? 'status-success':'status-danger'}">${r.maxQ <= r.q_allow ? 'Bearing OK':'Bearing Failure'}</div><table class="result-table" style="margin-top:10px;"><tr><td>Applied $q$</td><td>${r.maxQ.toFixed(1)} kPa</td></tr><tr><td>Ratio</td><td><strong>${((r.maxQ/r.q_allow)*100).toFixed(1)}%</strong></td></tr></table><div style="font-size:0.75rem; font-weight:700; margin-top:10px;">GABLE THRUST</div><table class="result-table"><tr><td>Req. $A_s$</td><td>${r.maxAsTie.toFixed(0)} mm²</td></tr><tr><td>Detail</td><td><strong>${r.maxAsTie > 0 ? Math.ceil(r.n_tie_legs/2)+'-N'+r.db_tie+' U-Bars' : 'None'}</strong></td></tr></table>`;
+            document.getElementById('reinfResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--accent); font-weight:700;">Slab Mesh</td></tr><tr><td>Size/Spacing</td><td>${r.db}mm @ ${r.spacing}mm</td></tr><tr><td>Std. Hook ($l_{dh}$)</td><td>${r.ldh_mesh.toFixed(0)} mm</td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Theoretical $A_s$ (mm²/m)</td></tr><tr><td>Flexural Demand</td><td>${r.As_flex_mesh.toFixed(0)}</td></tr><tr><td>Flexural Minimum</td><td>${r.As_min_flex_mesh.toFixed(0)}</td></tr><tr><td>Shrinkage & Temp</td><td>${r.As_shrink_mesh.toFixed(0)}</td></tr><tr><td>Governing Factor</td><td style="color:var(--accent)">${r.governClause}</td></tr>${r.struct_scheme === 'tie_beams' ? `<tr><td colspan="2" style="color:var(--success); font-weight:700; padding-top:10px;">Tie Beam Details</td></tr><tr><td>Main Bars</td><td><strong>${r.tieBeamBars}-N16</strong></td></tr><tr><td>Width x Depth</td><td>300 x ${r.he} mm</td></tr>` : ''}<tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Edge Detailing</td></tr><tr><td>Longitudinal (Req.)</td><td><strong>${r.n_edge_req}-N${r.db_edge}</strong></td></tr><tr><td>Edge Bar Position</td><td>Bottom of Trench</td></tr><tr><td>Lap Splice (Class B)</td><td><strong>${r.splice_edge.toFixed(0)} mm</strong></td></tr><tr><td>Std. Hook ($l_{dh}$)</td><td>${r.ldh_edge.toFixed(0)} mm</td></tr><tr><td>Top Mesh?</td><td>${r.topNeeded?'YES':'NO'}</td></tr></table>${r.spacingMaxed ? '<p style="color:var(--text-sub); font-size:0.75rem; margin-top:8px;"><i>Note: Mesh spacing governed by max code limits (3h or 450mm). Larger bars are inefficient here.</i></p>' : ''}`;
+            document.getElementById('lateralGeotechResults').innerHTML = `<div class="status-badge ${r.maxQ <= r.q_allow ? 'status-success':'status-danger'}">${r.maxQ <= r.q_allow ? 'Bearing OK':'Bearing Failure'}</div><table class="result-table" style="margin-top:10px;"><tr><td>Applied $q$</td><td>${r.maxQ.toFixed(1)} kPa</td></tr><tr><td>Ratio</td><td><strong>${((r.maxQ/r.q_allow)*100).toFixed(1)}%</strong></td></tr></table><div style="font-size:0.75rem; font-weight:700; margin-top:10px;">GABLE THRUST</div><table class="result-table"><tr><td>Req. $A_s$</td><td>${r.maxAsTie.toFixed(0)} mm²</td></tr><tr><td>Detail</td><td><strong>${r.struct_scheme === 'tie_beams' ? 'Handled by Tie Beam' : (r.maxAsTie > 0 ? Math.ceil(r.n_tie_legs/2)+'-N'+r.db_tie+' U-Bars' : 'None')}</strong></td></tr></table>`;
             
-            const totalKg = r.meshKg + r.edgeKg + r.tieKg;
-            document.getElementById('materialResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--success); font-weight:700;">Concrete</td></tr><tr><td>Total Volume</td><td><strong>${r.totalVol.toFixed(1)} m³</strong></td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Steel Reinforcement</td></tr><tr><td>N${r.db} Mesh</td><td>${r.meshKg.toFixed(0)} kg</td></tr><tr><td>N${r.db_edge} Edge Bars</td><td>${r.edgeKg.toFixed(0)} kg</td></tr><tr><td>N${r.db_tie} Ties</td><td>${r.tieKg.toFixed(0)} kg</td></tr><tr style="background:#f1f5f9;"><td><strong>Total Steel</strong></td><td><strong>${totalKg.toFixed(0)} kg</strong></td></tr></table>`;
+            document.getElementById('materialResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--success); font-weight:700;">Concrete</td></tr><tr><td>Total Volume</td><td><strong>${r.totalVol.toFixed(1)} m³</strong></td></tr>${r.struct_scheme === 'tie_beams' ? `<tr><td>Tie Beam Vol.</td><td>${r.tieBeamConcVol.toFixed(1)} m³</td></tr>` : ''}<tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Steel Reinforcement</td></tr><tr><td>N${r.db} Mesh</td><td>${r.meshKg.toFixed(0)} kg</td></tr><tr><td>N${r.db_edge} Edge Bars</td><td>${r.edgeKg.toFixed(0)} kg</td></tr><tr><td>N${r.db_tie} Ties</td><td>${r.tieKg.toFixed(0)} kg</td></tr>${r.struct_scheme === 'tie_beams' ? `<tr><td>N16 Tie Beam Steel</td><td>${r.tieBeamSteelKg.toFixed(0)} kg</td></tr>` : ''}<tr style="background:#f1f5f9;"><td><strong>Total Steel</strong></td><td><strong>${r.totalSteelKg.toFixed(0)} kg</strong></td></tr></table>`;
 
             if (window.MathJax) MathJax.typesetPromise();
         }
@@ -750,6 +776,31 @@
 
             ctxPlan.strokeStyle = '#cbd5e1'; ctxPlan.lineWidth = 1;
             ctxPlan.strokeRect(dx, dy, r.L*scale, r.W*scale);
+
+            // Tie Beams visualization (faint structural paths)
+            if (r.struct_scheme === 'tie_beams') {
+                ctxPlan.strokeStyle = 'rgba(15, 23, 42, 0.08)';
+                ctxPlan.lineWidth = (300 / 1000) * scale; // 300mm width
+                const processedIndices = new Set();
+                r.columns.forEach((c, idx) => {
+                    if (processedIndices.has(idx)) return;
+                    const pIdx = r.columns.findIndex((other, oIdx) => 
+                        oIdx !== idx && 
+                        !processedIndices.has(oIdx) &&
+                        Math.abs(other.x - c.x) < 0.1 && 
+                        Math.abs(other.y - (r.W - c.y)) < 2.0
+                    );
+                    if (pIdx !== -1) {
+                        const p = r.columns[pIdx];
+                        ctxPlan.beginPath();
+                        ctxPlan.moveTo(dx + c.x * scale, dy + c.y * scale);
+                        ctxPlan.lineTo(dx + p.x * scale, dy + p.y * scale);
+                        ctxPlan.stroke();
+                        processedIndices.add(idx);
+                        processedIndices.add(pIdx);
+                    }
+                });
+            }
 
             // Mesh
             if (document.getElementById('showReinf').checked) {
