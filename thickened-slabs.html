@@ -648,13 +648,19 @@
                     ctxPlan.beginPath(); ctxPlan.strokeStyle = '#f59e0b'; ctxPlan.lineWidth = 2;
                     ctxPlan.moveTo(px, py); ctxPlan.lineTo(px, py + dirY*30); ctxPlan.stroke();
                     
-                    // Hairpin visualization
+                    // Hairpin visualization (Bend at column, legs into slab)
                     if (r.maxAsTie > 0) {
                         ctxPlan.beginPath(); ctxPlan.strokeStyle = '#f59e0b'; ctxPlan.lineWidth = 1.5;
                         ctxPlan.setLineDash([2, 2]);
                         const hL = (1.5) * scale; // 1.5m extension
-                        ctxPlan.moveTo(px - 10, py); ctxPlan.lineTo(px - 10, py + dirY * hL);
-                        ctxPlan.lineTo(px + 10, py + dirY * hL); ctxPlan.lineTo(px + 10, py);
+                        // Legs start in the slab
+                        ctxPlan.moveTo(px - 10, py + dirY * hL);
+                        // Extend to column
+                        ctxPlan.lineTo(px - 10, py);
+                        // The Bend at the column
+                        ctxPlan.lineTo(px + 10, py);
+                        // Return leg
+                        ctxPlan.lineTo(px + 10, py + dirY * hL);
                         ctxPlan.stroke();
                         ctxPlan.setLineDash([]);
                     }
@@ -673,6 +679,15 @@
             const sh = r.hs*scale, eh = r.he*scale, eb = r.be*scale;
             ctxEle.fillStyle = '#f1f5f9'; ctxEle.strokeStyle = '#475569'; ctxEle.lineWidth = 2;
             ctxEle.beginPath(); ctxEle.moveTo(sx, mid-sh/2); ctxEle.lineTo(sx+r.be*1.5*scale, mid-sh/2); ctxEle.lineTo(sx+r.be*1.5*scale, mid+sh/2); ctxEle.lineTo(sx+eb*1.2, mid+sh/2); ctxEle.lineTo(sx+eb, mid+eh-sh/2); ctxEle.lineTo(sx, mid+eh-sh/2); ctxEle.closePath(); ctxEle.fill(); ctxEle.stroke();
+            
+            // Draw Edge Longitudinal Bars (Bottom)
+            ctxEle.fillStyle = '#2563eb';
+            for(let i=0; i<r.n_edge; i++) {
+                ctxEle.beginPath();
+                const barOffX = 30 + i * 20;
+                ctxEle.arc(sx + barOffX, mid + eh - sh/2 - 30, 4, 0, 6.28);
+                ctxEle.fill();
+            }
             
             if (r.maxAsTie > 0) { 
                 ctxEle.strokeStyle = '#f59e0b'; ctxEle.lineWidth = 2;
