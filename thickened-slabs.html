@@ -253,7 +253,7 @@
         </div>
         <div style="display: flex; align-items: center; gap: 1.5rem;">
             <a href="https://github.com/danielthegfosji-cloud/reinforcedConcrete" target="_blank" style="color: white; text-decoration: none; font-size: 0.9rem; opacity: 0.8;"><i class="fa-brands fa-github"></i> GitHub</a>
-            <div style="font-size: 0.8rem; opacity: 0.8;">Westergaard & ACI 318-11 v2.5</div>
+            <div style="font-size: 0.8rem; opacity: 0.8;">Westergaard & ACI 318-11 v2.6</div>
         </div>
     </nav>
 
@@ -623,9 +623,14 @@
             
             // Mesh Steel & Spacing (ACI 10.5.4 via 10.5.1 Flexural Minimums)
             const area_bar_mesh = (Math.PI * db**2) / 4;
-            const As_flex = (maxMpos * 1.0) / (0.9 * fy * 0.9 * d);
-            const As_min_flex = Math.max( (0.25 * Math.sqrt(fc) / fy) * 1000 * d, (1.4 / fy) * 1000 * d );
-            const As_d = Math.max(As_flex, As_min_flex, 0.0018 * 1000 * hs);
+            const As_flex_mesh = (maxMpos * 1000) / (0.9 * fy * 0.9 * d);
+            const As_min_flex_mesh = Math.max( (0.25 * Math.sqrt(fc) / fy) * 1000 * d, (1.4 / fy) * 1000 * d );
+            const As_shrink_mesh = 0.0018 * 1000 * hs;
+            
+            let governClause = "Shrinkage & Temp";
+            let As_d = As_shrink_mesh;
+            if (As_flex_mesh > As_d) { As_d = As_flex_mesh; governClause = "Flexure (Demand)"; }
+            if (As_min_flex_mesh > As_d) { As_d = As_min_flex_mesh; governClause = "Flexure (Min)"; }
             
             let spacing_req = (area_bar_mesh * 1000) / As_d;
             // Limit spacing to min(3h, 450mm) per ACI 10.5.4
@@ -659,7 +664,7 @@
             const supportKg = n_supports * supportLen * steelWeights[10];
 
             // Cache for drawing
-            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge_req, db_tie, n_tie_legs, fy, totalVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, splice_edge, ldh_edge, ldh_mesh, supportKg, spacingMaxed };
+            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge_req, db_tie, n_tie_legs, fy, totalVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, splice_edge, ldh_edge, ldh_mesh, supportKg, spacingMaxed, As_flex_mesh, As_min_flex_mesh, As_shrink_mesh, governClause };
 
             // Update DOM
             renderResults();
@@ -684,7 +689,7 @@
             const rP = r.maxVuP / r.maxPhiVcP, rOW = r.maxVuOW > 0 ? r.maxVuOW / r.maxPhiVcOW : 0;
             const pF = rP >= 1, owF = rOW >= 1;
             document.getElementById('shearResults').innerHTML = `<div style="margin-bottom:1rem;" class="status-badge ${(!pF && !owF)?'status-success':'status-danger'}">${(!pF && !owF)?'Shear OK':'Shear Failure'}</div><div style="font-size:0.75rem; font-weight:700;">PUNCHING (${r.worstCond})</div><table class="result-table" style="margin-bottom:10px;"><tr><td>Ratio</td><td><strong>${(rP*100).toFixed(1)}%</strong> ${pF?'❌':'✅'}</td></tr></table><div style="font-size:0.75rem; font-weight:700;">ONE-WAY (Edge)</div><table class="result-table"><tr><td>Ratio</td><td><strong>${(rOW*100).toFixed(1)}%</strong> ${owF?'❌':'✅'}</td></tr></table>${pF?'<p style="color:red; font-size:0.75rem; font-weight:700;">⚠️ Punching Failure: Increase $h_s$ or $f\'_c$.</p>':''}${owF?'<p style="color:red; font-size:0.75rem; font-weight:700;">⚠️ One-Way Failure: Increase $h_e$ or $b_e$.</p>':''}`;
-            document.getElementById('reinfResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--accent); font-weight:700;">Slab Mesh</td></tr><tr><td>Size/Spacing</td><td>${r.db}mm @ ${r.spacing}mm</td></tr><tr><td>Std. Hook ($l_{dh}$)</td><td>${r.ldh_mesh.toFixed(0)} mm</td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Edge Detailing</td></tr><tr><td>Longitudinal (Req.)</td><td><strong>${r.n_edge_req}-N${r.db_edge}</strong></td></tr><tr><td>Edge Bar Position</td><td>Bottom of Trench</td></tr><tr><td>Lap Splice (Class B)</td><td><strong>${r.splice_edge.toFixed(0)} mm</strong></td></tr><tr><td>Std. Hook ($l_{dh}$)</td><td>${r.ldh_edge.toFixed(0)} mm</td></tr><tr><td>Top Mesh?</td><td>${r.topNeeded?'YES':'NO'}</td></tr></table>${r.spacingMaxed ? '<p style="color:var(--text-sub); font-size:0.75rem; margin-top:8px;"><i>Note: Mesh spacing governed by max code limits (3h or 450mm). Larger bars are inefficient here.</i></p>' : ''}`;
+            document.getElementById('reinfResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--accent); font-weight:700;">Slab Mesh</td></tr><tr><td>Size/Spacing</td><td>${r.db}mm @ ${r.spacing}mm</td></tr><tr><td>Std. Hook ($l_{dh}$)</td><td>${r.ldh_mesh.toFixed(0)} mm</td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Theoretical $A_s$ (mm²/m)</td></tr><tr><td>Flexural Demand</td><td>${r.As_flex_mesh.toFixed(0)}</td></tr><tr><td>Flexural Minimum</td><td>${r.As_min_flex_mesh.toFixed(0)}</td></tr><tr><td>Shrinkage & Temp</td><td>${r.As_shrink_mesh.toFixed(0)}</td></tr><tr><td>Governing Factor</td><td style="color:var(--accent)">${r.governClause}</td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Edge Detailing</td></tr><tr><td>Longitudinal (Req.)</td><td><strong>${r.n_edge_req}-N${r.db_edge}</strong></td></tr><tr><td>Edge Bar Position</td><td>Bottom of Trench</td></tr><tr><td>Lap Splice (Class B)</td><td><strong>${r.splice_edge.toFixed(0)} mm</strong></td></tr><tr><td>Std. Hook ($l_{dh}$)</td><td>${r.ldh_edge.toFixed(0)} mm</td></tr><tr><td>Top Mesh?</td><td>${r.topNeeded?'YES':'NO'}</td></tr></table>${r.spacingMaxed ? '<p style="color:var(--text-sub); font-size:0.75rem; margin-top:8px;"><i>Note: Mesh spacing governed by max code limits (3h or 450mm). Larger bars are inefficient here.</i></p>' : ''}`;
             document.getElementById('lateralGeotechResults').innerHTML = `<div class="status-badge ${r.maxQ <= r.q_allow ? 'status-success':'status-danger'}">${r.maxQ <= r.q_allow ? 'Bearing OK':'Bearing Failure'}</div><table class="result-table" style="margin-top:10px;"><tr><td>Applied $q$</td><td>${r.maxQ.toFixed(1)} kPa</td></tr><tr><td>Ratio</td><td><strong>${((r.maxQ/r.q_allow)*100).toFixed(1)}%</strong></td></tr></table><div style="font-size:0.75rem; font-weight:700; margin-top:10px;">GABLE THRUST</div><table class="result-table"><tr><td>Req. $A_s$</td><td>${r.maxAsTie.toFixed(0)} mm²</td></tr><tr><td>Detail</td><td><strong>${r.maxAsTie > 0 ? Math.ceil(r.n_tie_legs/2)+'-N'+r.db_tie+' U-Bars' : 'None'}</strong></td></tr></table>`;
             
             const totalKg = r.meshKg + r.edgeKg + r.tieKg;
