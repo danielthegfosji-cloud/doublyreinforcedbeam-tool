@@ -415,6 +415,10 @@
                     <div class="panel-header" style="border-bottom-color: var(--text-sub);">Lateral Ties & Geotech</div>
                     <div id="lateralGeotechResults"></div>
                 </div>
+                <div class="card">
+                    <div class="panel-header" style="border-bottom-color: var(--text-sub);">Material Summary</div>
+                    <div id="materialResults"></div>
+                </div>
             </div>
         </main>
     </div>
@@ -586,8 +590,29 @@
             const area_tie = (Math.PI * db_tie**2) / 4;
             const n_tie_legs = Math.ceil(maxAsTie / area_tie);
 
+            // Material Summary Calculations
+            const vol_slab = L * W * (hs / 1000);
+            const vol_edge = 2 * (L + W) * (be / 1000) * ((he - hs) / 1000);
+            const totalVol = vol_slab + vol_edge;
+
+            const steelWeights = { 10: 0.617, 12: 0.888, 16: 1.58, 20: 2.47 };
+            
+            // Mesh Steel (Two layers if top mesh required)
+            const n_layers = topNeeded ? 2 : 1;
+            const meshLen = n_layers * ((L * (W / (spacing/1000) + 1)) + (W * (L / (spacing/1000) + 1)));
+            const meshKg = meshLen * steelWeights[db];
+
+            // Edge Steel
+            const edgeLen = 2 * (L + W) * n_edge;
+            const edgeKg = edgeLen * steelWeights[db_edge];
+
+            // Tie Steel (assume average hairpin length 3.5m total)
+            const n_cols_w_thrust = columns.filter(c => c.h > 0).length;
+            const tieLen = n_cols_w_thrust * Math.ceil(n_tie_legs/2) * 3.5;
+            const tieKg = tieLen * steelWeights[db_tie];
+
             // Cache for drawing
-            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge, db_tie, n_tie_legs, fy };
+            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge, db_tie, n_tie_legs, fy, totalVol, meshKg, edgeKg, tieKg };
 
             // Update DOM
             renderResults();
@@ -606,6 +631,9 @@
             
             document.getElementById('lateralGeotechResults').innerHTML = `<div class="status-badge ${r.maxQ <= r.q_allow ? 'status-success':'status-danger'}">${r.maxQ <= r.q_allow ? 'Bearing OK':'Bearing Failure'}</div><table class="result-table" style="margin-top:10px;"><tr><td>Applied $q$</td><td>${r.maxQ.toFixed(1)} kPa</td></tr><tr><td>Ratio</td><td><strong>${((r.maxQ/r.q_allow)*100).toFixed(1)}%</strong></td></tr></table><div style="font-size:0.75rem; font-weight:700; margin-top:10px;">GABLE THRUST</div><table class="result-table"><tr><td>Req. $A_s$</td><td>${r.maxAsTie.toFixed(0)} mm²</td></tr><tr><td>Detail</td><td><strong>${r.maxAsTie > 0 ? Math.ceil(r.n_tie_legs/2)+'-N'+r.db_tie+' U-Bars' : 'None'}</strong></td></tr></table>`;
             
+            const totalKg = r.meshKg + r.edgeKg + r.tieKg;
+            document.getElementById('materialResults').innerHTML = `<table class="result-table"><tr><td colspan="2" style="color:var(--success); font-weight:700;">Concrete</td></tr><tr><td>Total Volume</td><td><strong>${r.totalVol.toFixed(1)} m³</strong></td></tr><tr><td colspan="2" style="color:var(--accent); font-weight:700; padding-top:10px;">Steel Reinforcement</td></tr><tr><td>N${r.db} Mesh</td><td>${r.meshKg.toFixed(0)} kg</td></tr><tr><td>N${r.db_edge} Edge Bars</td><td>${r.edgeKg.toFixed(0)} kg</td></tr><tr><td>N${r.db_tie} Ties</td><td>${r.tieKg.toFixed(0)} kg</td></tr><tr style="background:#f1f5f9;"><td><strong>Total Steel</strong></td><td><strong>${totalKg.toFixed(0)} kg</strong></td></tr></table>`;
+
             if (window.MathJax) MathJax.typesetPromise();
         }
 
@@ -628,7 +656,7 @@
             ctxPlan.strokeRect(dx, dy, r.L*scale, r.W*scale);
             ctxPlan.strokeRect(dx+beS, dy+beS, (r.L-2*r.be/1000)*scale, (r.W-2*r.be/1000)*scale);
 
-            // Mesh (Optimized: Single path)
+            // Mesh
             if (document.getElementById('showReinf').checked) {
                 ctxPlan.beginPath(); ctxPlan.strokeStyle = 'rgba(37, 99, 235, 0.15)'; ctxPlan.lineWidth = 0.5;
                 const sm = r.spacing/1000;
@@ -643,25 +671,41 @@
                 ctxPlan.fillStyle = 'rgba(37, 99, 235, 0.05)'; ctxPlan.fill();
                 
                 if (c.h > 0) {
+                    const cond = getColumnCondition(c.x, c.y, r.L, r.W, 0.5);
                     const dirY = c.y > r.W/2 ? -1 : 1; 
+                    const dirX = c.x > r.L/2 ? -1 : 1;
+
                     // Thrust Vector
                     ctxPlan.beginPath(); ctxPlan.strokeStyle = '#f59e0b'; ctxPlan.lineWidth = 2;
-                    ctxPlan.moveTo(px, py); ctxPlan.lineTo(px, py + dirY*30); ctxPlan.stroke();
+                    ctxPlan.moveTo(px, py); 
+                    ctxPlan.lineTo(px, py + dirY*30); 
+                    ctxPlan.stroke();
                     
-                    // Hairpin visualization (Bend at column, legs into slab)
+                    // Hairpin visualization
                     if (r.maxAsTie > 0) {
                         ctxPlan.beginPath(); ctxPlan.strokeStyle = '#f59e0b'; ctxPlan.lineWidth = 1.5;
                         ctxPlan.setLineDash([2, 2]);
-                        const hL = (1.5) * scale; // 1.5m extension
-                        // Legs start in the slab
-                        ctxPlan.moveTo(px - 10, py + dirY * hL);
-                        // Extend to column
-                        ctxPlan.lineTo(px - 10, py);
-                        // The Bend at the column
-                        ctxPlan.lineTo(px + 10, py);
-                        // Return leg
-                        ctxPlan.lineTo(px + 10, py + dirY * hL);
-                        ctxPlan.stroke();
+                        const hL = (1.5) * scale;
+                        
+                        if (cond === "Corner") {
+                            // Point 45 deg toward center
+                            ctxPlan.save();
+                            ctxPlan.translate(px, py);
+                            ctxPlan.rotate(Math.atan2(dirY, dirX));
+                            ctxPlan.moveTo(0, -10);
+                            ctxPlan.lineTo(hL, -10);
+                            ctxPlan.lineTo(hL, 10);
+                            ctxPlan.lineTo(0, 10);
+                            ctxPlan.stroke();
+                            ctxPlan.restore();
+                        } else {
+                            // Standard edge hairpin
+                            ctxPlan.moveTo(px - 10, py + dirY * hL);
+                            ctxPlan.lineTo(px - 10, py);
+                            ctxPlan.lineTo(px + 10, py);
+                            ctxPlan.lineTo(px + 10, py + dirY * hL);
+                            ctxPlan.stroke();
+                        }
                         ctxPlan.setLineDash([]);
                     }
                 }
