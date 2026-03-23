@@ -361,16 +361,11 @@
                 </select>
             </div>
             <div class="input-group">
-                <label>Edge $n_x$ (Width)</label>
-                <input type="number" id="nx_edge" value="3" min="2">
+                <label>Edge Bars (Qty)</label>
+                <input type="number" id="n_edge_bars" value="4" min="2">
             </div>
             <div class="input-group">
-                <label>Edge $n_y$ (Depth)</label>
-                <input type="number" id="ny_edge" value="2" min="2">
-            </div>
-            <div class="input-group">
-                <label>Tie Bar Size ($mm$)</label>
-                <select id="db_tie">
+                <label>Tie Bar Size ($mm$)</label>                <select id="db_tie">
                     <option value="12">12 mm</option>
                     <option value="16" selected>16 mm</option>
                     <option value="20">20 mm</option>
@@ -602,8 +597,7 @@
             const db = parseFloat(document.getElementById('db_mm').value);
             const db_edge = parseFloat(document.getElementById('db_edge').value);
             const db_tie = parseFloat(document.getElementById('db_tie').value);
-            const nx = parseInt(document.getElementById('nx_edge').value) || 2;
-            const ny = parseInt(document.getElementById('ny_edge').value) || 2;
+            const n_edge_bars = parseInt(document.getElementById('n_edge_bars').value) || 2;
 
             // Structural Scheme Logic
             const struct_scheme = document.getElementById('struct_scheme').value;
@@ -673,7 +667,7 @@
             // ACI 10.5.1 Beam Min Steel
             const As_min_beam = Math.max( (0.25 * Math.sqrt(fc) / fy) * be * d_edge, (1.4 / fy) * be * d_edge );
             const As_edge_structural = Math.max(As_edge_flex, As_min_beam);
-            n_edge_req = 2 * nx + 2 * (ny - 2);
+            n_edge_req = n_edge_bars;
 
             // Flexural Capacity Check
             const As_edge_user = n_edge_req * ((Math.PI * db_edge**2) / 4);
@@ -768,7 +762,7 @@
             const totalSteelKg = meshKg + edgeKg + tieKg + tieBeamSteelKg;
 
             // Cache for drawing
-            lastResults = { L, W, hs, he, be, nx, ny, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge_req, db_tie, n_tie_legs, fy, vol_slab, vol_edge, tieBeamConcVol, totalVol: vol_slab + vol_edge + tieBeamConcVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, splice_edge, ldh_edge, ldh_mesh, supportKg, spacingMaxed, As_flex_mesh, As_min_flex_mesh, As_shrink_mesh, governClause, ld: ld_edge, struct_scheme, tieBeamBars, tieBeamSteelKg, totalSteelKg };
+            lastResults = { L, W, hs, he, be, n_edge_bars, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge_req, db_tie, n_tie_legs, fy, vol_slab, vol_edge, tieBeamConcVol, totalVol: vol_slab + vol_edge + tieBeamConcVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, splice_edge, ldh_edge, ldh_mesh, supportKg, spacingMaxed, As_flex_mesh, As_min_flex_mesh, As_shrink_mesh, governClause, ld: ld_edge, struct_scheme, tieBeamBars, tieBeamSteelKg, totalSteelKg };
 
             // Update DOM
             renderResults();
@@ -942,36 +936,20 @@
             ctxEle.strokeStyle = '#94a3b8'; ctxEle.lineWidth = 2;
             ctxEle.strokeRect(sx + clearCover, mid + sh/2, eb - 2*clearCover, eh - sh - clearCover);
 
-            // Draw Edge Longitudinal Bars (Grid)
+            // Draw Edge Longitudinal Bars (Distributed along Bottom)
             ctxEle.fillStyle = '#2563eb';
-            const nx = r.nx || 2;
-            const ny = r.ny || 2;
+            const n_edge = r.n_edge_bars || 2;
             const frameX = sx + clearCover;
             const frameY = mid + sh/2;
             const frameW = eb - 2 * clearCover;
             const frameH = eh - sh - clearCover;
 
-            const dx = nx > 1 ? frameW / (nx - 1) : 0;
-            const dy = ny > 1 ? frameH / (ny - 1) : 0;
+            const dx_edge = n_edge > 1 ? frameW / (n_edge - 1) : 0;
 
-            for (let i = 0; i < nx; i++) {
-                // Top row
+            for (let i = 0; i < n_edge; i++) {
+                // Distribute along the bottom of the trench
                 ctxEle.beginPath();
-                ctxEle.arc(frameX + i * dx, frameY, 5, 0, 6.28);
-                ctxEle.fill();
-                // Bottom row
-                ctxEle.beginPath();
-                ctxEle.arc(frameX + i * dx, frameY + frameH, 5, 0, 6.28);
-                ctxEle.fill();
-            }
-            for (let j = 1; j < ny - 1; j++) {
-                // Left side
-                ctxEle.beginPath();
-                ctxEle.arc(frameX, frameY + j * dy, 5, 0, 6.28);
-                ctxEle.fill();
-                // Right side
-                ctxEle.beginPath();
-                ctxEle.arc(frameX + frameW, frameY + j * dy, 5, 0, 6.28);
+                ctxEle.arc(frameX + i * dx_edge, frameY + frameH, 5, 0, 6.28);
                 ctxEle.fill();
             }
             
