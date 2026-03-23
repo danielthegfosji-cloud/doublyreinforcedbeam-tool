@@ -408,11 +408,12 @@
             const pitch = Math.atan2(rise, run);
             const pitchDeg = pitch * 180 / Math.PI;
 
-            // 2. Loads
+            // 2. Loads (Factored LRFD)
             const dl = parseFloat(document.getElementById('dl_kpa').value);
             const ll = parseFloat(document.getElementById('ll_kpa').value);
             const w_factored = (1.2 * dl + 1.6 * ll) * spacing;
             
+            // Simplified Analysis: 3-Hinged Arch (Hinge at Base and Apex)
             const P_reaction = (w_factored * L) / 2; 
             const H_thrust = (w_factored * Math.pow(L, 2)) / (8 * Ha);
 
@@ -425,13 +426,14 @@
             const rafShape = aiscDb.find(s => s[labelKey] === rafLabel);
 
             const M_col = H_thrust * He; 
-            const colRatio = checkMember(colShape, P_reaction, M_col, fy);
+            const colResults = checkMember(colShape, P_reaction, M_col, fy);
 
             const M_raf = M_col; 
-            const rafRatio = checkMember(rafShape, P_reaction / Math.sin(pitch), M_raf, fy);
+            const P_raf = P_reaction * Math.sin(pitch) + H_thrust * Math.cos(pitch);
+            const rafResults = checkMember(rafShape, P_raf, M_raf, fy);
 
             renderReactions(P_reaction, H_thrust);
-            renderIntegrity(colRatio, rafRatio, colLabel, rafLabel);
+            renderIntegrity(colResults, rafResults, colLabel, rafLabel);
             renderSummary(L, He, Ha, pitchDeg, colLabel, rafLabel);
             drawFrame(L, He, Ha);
         }
@@ -449,18 +451,21 @@
             const H_thrust = (w_factored * Math.pow(L, 2)) / (8 * Ha);
             const Mu = H_thrust * He;
 
-            // Solve 0.25*tw*d^2 + (bf*tf)*d - Mu*10^6/(0.9*Fy) = 0
+            // AISC 360-16 LRFD: Mu <= phi * Fy * Zx
+            // Zx approx = Af * d + 1/4 * tw * d^2
             const tw = 8; 
             const bf = 200;
             const tf = 12;
+            const phi = 0.9;
+            
             const A = 0.25 * tw;
             const B = bf * tf;
-            const C = -(Mu * 1e6) / (0.9 * fy);
+            const C = -(Mu * 1e6) / (phi * fy);
             
-            taperedDepth = (-B + Math.sqrt(B*B - 4*A*C)) / (2*A);
+            const discriminant = B * B - 4 * A * C;
+            taperedDepth = (discriminant > 0) ? (-B + Math.sqrt(discriminant)) / (2 * A) : 0;
             isTaperedMode = true;
             
-            // Re-render
             const pitch = Math.atan2(Ha - He, L / 2);
             const pitchDeg = pitch * 180 / Math.PI;
             const P_reaction = (w_factored * L) / 2;
@@ -475,10 +480,10 @@
                     <tr><td>$M_u$ (Eave)</td><td>${Mu.toFixed(1)} kNm</td></tr>
                 </table>
                 <div style="margin-top:15px; font-size:0.7rem; color:var(--text-sub); border-top:1px solid #eee; padding-top:10px;">
-                    <b>Design Basis:</b><br>
-                    Solving for depth $d$ where:<br>
-                    $M_u \leq \phi F_y Z_x$<br>
-                    $Z_x \approx A_f d + \frac{1}{4} t_w d^2$
+                    <b>Design Basis (Tapered):</b><br>
+                    Yielding: $M_u \leq \phi F_y Z_x$ where $\phi=0.9$<br>
+                    Section Modulus $Z_x \approx b_f t_f d + \frac{1}{4} t_w d^2$<br>
+                    Solved via quadratic for optimal $d$.
                 </div>
             `;
             if (window.MathJax) MathJax.typesetPromise();
@@ -527,6 +532,7 @@
                 const P_reaction = (w_factored * L) / 2;
                 const H_thrust = (w_factored * Math.pow(L, 2)) / (8 * Ha);
                 const M_max = H_thrust * He;
+                const P_raf = P_reaction * Math.sin(pitch) + H_thrust * Math.cos(pitch);
 
                 const labelKey = Object.keys(aiscDb[0] || {}).find(k => k.toLowerCase() === 'aisc_manual_label') || 'AISC_Manual_Label';
                 const typeKey = Object.keys(aiscDb[0] || {}).find(k => k.toLowerCase() === 'type') || 'Type';
@@ -540,15 +546,14 @@
                 let bestRaf = null;
 
                 for (let shape of candidates) {
-                    if (checkMember(shape, P_reaction, M_max, fy) < 1.0) {
+                    if (checkMember(shape, P_reaction, M_max, fy).ratio < 1.0) {
                         bestCol = shape[labelKey];
                         break;
                     }
                 }
 
                 for (let shape of candidates) {
-                    const P_raf = P_reaction / Math.sin(pitch);
-                    if (checkMember(shape, P_raf, M_max, fy) < 1.0) {
+                    if (checkMember(shape, P_raf, M_max, fy).ratio < 1.0) {
                         bestRaf = shape[labelKey];
                         break;
                     }
@@ -563,32 +568,48 @@
         }
 
         function checkMember(shape, P, M, Fy) {
-            if (!shape) return { ratio: 999 };
+            const result = {
+                ratio: 999,
+                Pn: 0,
+                Mn: 0,
+                axialRatio: 0,
+                bendingRatio: 0
+            };
+
+            if (!shape) return result;
+
             const aKey = Object.keys(shape).find(k => k === 'A' || k === 'Area') || 'A';
             const sxKey = Object.keys(shape).find(k => k === 'Sx' || k === 'S_x') || 'Sx';
             const zxKey = Object.keys(shape).find(k => k === 'Zx' || k === 'Z_x') || 'Zx';
             
-            const Ag = parseFloat(shape[aKey]) * 645.16;
-            const Sx = parseFloat(shape[sxKey]) * 16387.06;
-            const Zx = parseFloat(shape[zxKey]) * 16387.06;
+            const Ag = parseFloat(shape[aKey]) * 645.16; // inch2 to mm2
+            const Sx = parseFloat(shape[sxKey]) * 16387.06; // inch3 to mm3
+            const Zx = parseFloat(shape[zxKey]) * 16387.06; // inch3 to mm3
 
-            if (isNaN(Ag) || isNaN(Sx)) return { ratio: 999 };
+            if (isNaN(Ag) || isNaN(Sx)) return result;
 
-            const Mn = Math.min(Fy * Zx, 1.6 * Fy * Sx) / 1e6;
-            const Pn = (Fy * Ag) / 1000;
+            // AISC 360-16 LRFD Formulas
+            const phi = 0.9;
+            const Mn_nom = Math.min(Fy * Zx, 1.6 * Fy * Sx); // Nmm
+            const Pn_nom = Fy * Ag; // N (Assuming fully braced for simple check)
             
-            const axialRatio = (P) / (0.9 * Pn);
-            const bendingRatio = (M) / (0.9 * Mn);
+            result.Pn = phi * Pn_nom / 1000; // kN
+            result.Mn = phi * Mn_nom / 1e6; // kNm
             
-            return {
-                ratio: axialRatio + bendingRatio,
-                Pn: 0.9 * Pn,
-                Mn: 0.9 * Mn,
-                Ag: Ag,
-                Zx: Zx,
-                axialRatio: axialRatio,
-                bendingRatio: bendingRatio
-            };
+            const pr = P / result.Pn;
+            const mr = M / result.Mn;
+            
+            result.axialRatio = pr;
+            result.bendingRatio = mr;
+
+            // AISD H1-1 Interaction
+            if (pr >= 0.2) {
+                result.ratio = pr + (8/9) * mr;
+            } else {
+                result.ratio = pr/2 + mr;
+            }
+            
+            return result;
         }
 
         function renderReactions(P, H) {
@@ -596,9 +617,6 @@
         }
 
         function renderIntegrity(colResults, rafResults, colName, rafName) {
-            const colStatus = colResults.ratio < 1.0 ? 'status-success' : 'status-danger';
-            const rafStatus = rafResults.ratio < 1.0 ? 'status-success' : 'status-danger';
-            
             document.getElementById('memberResults').innerHTML = `
                 <div style="font-size:0.75rem; font-weight:700; color:var(--accent); margin-bottom:5px;">COLUMN: ${colName}</div>
                 <table class="result-table" style="margin-bottom:15px;">
@@ -615,10 +633,10 @@
                 </table>
                 
                 <div style="margin-top:15px; font-size:0.7rem; color:var(--text-sub); border-top:1px solid #eee; padding-top:10px;">
-                    <b>LRFD Basis:</b><br>
-                    $\phi M_n = 0.9 \cdot F_y \cdot Z_x$<br>
-                    $\phi P_n = 0.9 \cdot F_y \cdot A_g$<br>
-                    Ratio $= \frac{P_u}{\phi P_n} + \frac{M_u}{\phi M_n}$
+                    <b>AISC 360-16 LRFD Basis:</b><br>
+                    If $P_u/\phi P_n \geq 0.2$: $\frac{P_u}{\phi P_n} + \frac{8}{9}\frac{M_u}{\phi M_n} \leq 1.0$<br>
+                    Else: $\frac{P_u}{2\phi P_n} + \frac{M_u}{\phi M_n} \leq 1.0$<br>
+                    <i>(Note: $P_n$ assumes full lateral bracing)</i>
                 </div>
             `;
             if (window.MathJax) MathJax.typesetPromise();
