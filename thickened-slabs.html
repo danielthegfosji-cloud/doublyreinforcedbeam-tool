@@ -261,6 +261,14 @@
         <!-- Sidebar -->
         <aside class="input-panel">
             <div>
+                <div class="panel-header">Design Presets</div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-add" style="background: var(--primary); font-size: 0.7rem;" onclick="applyPreset('default')">Commercial (5-Bay)</button>
+                    <button class="btn-add" style="background: #475569; font-size: 0.7rem;" onclick="applyPreset('7bay')">Light (7-Bay)</button>
+                </div>
+            </div>
+
+            <div>
                 <div class="panel-header">Structural Scheme</div>
                 <div class="input-group" style="grid-template-columns: 1fr;">
                     <select id="struct_scheme" onchange="calculate()">
@@ -335,30 +343,39 @@
                     <label class="hint-label" title="Friction coefficient between concrete and subgrade/vapor barrier.">Friction $\mu$</label>
                     <input type="number" id="mu" value="0.4" step="0.05">
                 </div>
-                <div class="input-group">
-                    <label>Mesh Bar Size ($mm$)</label>
-                    <select id="db_mm">
-                        <option value="10">10 mm</option>
-                        <option value="12" selected>12 mm</option>
-                        <option value="16">16 mm</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label>Edge Bar Size ($mm$)</label>
-                    <select id="db_edge">
-                        <option value="12" selected>12 mm</option>
-                        <option value="16">16 mm</option>
-                        <option value="20">20 mm</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label>Tie Bar Size ($mm$)</label>
-                    <select id="db_tie">
-                        <option value="12">12 mm</option>
-                        <option value="16" selected>16 mm</option>
-                        <option value="20">20 mm</option>
-                    </select>
-                </div>
+            <div class="section-header">Reinforcement</div>
+            <div class="input-group">
+                <label>Mesh Bar Size ($mm$)</label>
+                <select id="db_mm">
+                    <option value="10">10 mm</option>
+                    <option value="12" selected>12 mm</option>
+                    <option value="16">16 mm</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Edge Bar Size ($mm$)</label>
+                <select id="db_edge">
+                    <option value="12" selected>12 mm</option>
+                    <option value="16">16 mm</option>
+                    <option value="20">20 mm</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Edge $n_x$ (Width)</label>
+                <input type="number" id="nx_edge" value="3" min="2">
+            </div>
+            <div class="input-group">
+                <label>Edge $n_y$ (Depth)</label>
+                <input type="number" id="ny_edge" value="2" min="2">
+            </div>
+            <div class="input-group">
+                <label>Tie Bar Size ($mm$)</label>
+                <select id="db_tie">
+                    <option value="12">12 mm</option>
+                    <option value="16" selected>16 mm</option>
+                    <option value="20">20 mm</option>
+                </select>
+            </div>
             </div>
 
             <div>
@@ -437,6 +454,29 @@
 
     <script>
         // Data and State
+        function applyPreset(type) {
+            if (type === 'default') {
+                document.getElementById('L_m').value = 25;
+                document.getElementById('W_m').value = 20;
+                columns = [
+                    {x: 0, y: 0, p: 51, h: 30}, {x: 5, y: 0, p: 102, h: 30}, {x: 10, y: 0, p: 102, h: 30}, {x: 15, y: 0, p: 102, h: 30}, {x: 20, y: 0, p: 102, h: 30}, {x: 25, y: 0, p: 51, h: 30},
+                    {x: 0, y: 20, p: 51, h: 30}, {x: 5, y: 20, p: 102, h: 30}, {x: 10, y: 20, p: 102, h: 30}, {x: 15, y: 20, p: 102, h: 30}, {x: 20, y: 20, p: 102, h: 30}, {x: 25, y: 20, p: 51, h: 30}
+                ];
+            } else if (type === '7bay') {
+                document.getElementById('L_m').value = 35;
+                document.getElementById('W_m').value = 20;
+                columns = [];
+                for (let x = 0; x <= 35; x += 5) {
+                    const isCorner = (x === 0 || x === 35);
+                    const p = isCorner ? 42 : 82;
+                    columns.push({x: x, y: 0, p: p, h: 30});
+                    columns.push({x: x, y: 20, p: p, h: 30});
+                }
+            }
+            renderColumnList();
+            calculate();
+        }
+
         let columns = [
             {x: 0, y: 0, p: 51, h: 30}, {x: 5, y: 0, p: 102, h: 30}, {x: 10, y: 0, p: 102, h: 30}, {x: 15, y: 0, p: 102, h: 30}, {x: 20, y: 0, p: 102, h: 30}, {x: 25, y: 0, p: 51, h: 30},
             {x: 0, y: 20, p: 51, h: 30}, {x: 5, y: 20, p: 102, h: 30}, {x: 10, y: 20, p: 102, h: 30}, {x: 15, y: 20, p: 102, h: 30}, {x: 20, y: 20, p: 102, h: 30}, {x: 25, y: 20, p: 51, h: 30}
@@ -560,6 +600,8 @@
             const db = parseFloat(document.getElementById('db_mm').value);
             const db_edge = parseFloat(document.getElementById('db_edge').value);
             const db_tie = parseFloat(document.getElementById('db_tie').value);
+            const nx = parseInt(document.getElementById('nx_edge').value) || 2;
+            const ny = parseInt(document.getElementById('ny_edge').value) || 2;
 
             // Structural Scheme Logic
             const struct_scheme = document.getElementById('struct_scheme').value;
@@ -570,6 +612,7 @@
 
             renderColumnList();
 
+            // ... (rest of the analysis logic)
             // Analysis
             const E = 4700 * Math.sqrt(fc);
             const phi_s = 0.75, phi_t = 0.90, d = hs - 40, d_edge = he - 50;
@@ -627,8 +670,8 @@
             
             // ACI 10.5.1 Beam Min Steel
             const As_min_beam = Math.max( (0.25 * Math.sqrt(fc) / fy) * be * d_edge, (1.4 / fy) * be * d_edge );
-            const As_edge_req = Math.max(As_edge_flex, As_min_beam);
-            n_edge_req = Math.max(2, Math.ceil(As_edge_req / ((Math.PI * db_edge**2) / 4)));
+            const As_edge_structural = Math.max(As_edge_flex, As_min_beam);
+            n_edge_req = 2 * nx + 2 * (ny - 2);
 
             // Flexural Capacity Check
             const As_edge_user = n_edge_req * ((Math.PI * db_edge**2) / 4);
@@ -723,7 +766,7 @@
             const totalSteelKg = meshKg + edgeKg + tieKg + tieBeamSteelKg;
 
             // Cache for drawing
-            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge_req, db_tie, n_tie_legs, fy, vol_slab, vol_edge, tieBeamConcVol, totalVol: vol_slab + vol_edge + tieBeamConcVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, splice_edge, ldh_edge, ldh_mesh, supportKg, spacingMaxed, As_flex_mesh, As_min_flex_mesh, As_shrink_mesh, governClause, ld: ld_edge, struct_scheme, tieBeamBars, tieBeamSteelKg, totalSteelKg };
+            lastResults = { L, W, hs, he, be, nx, ny, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge_req, db_tie, n_tie_legs, fy, vol_slab, vol_edge, tieBeamConcVol, totalVol: vol_slab + vol_edge + tieBeamConcVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, splice_edge, ldh_edge, ldh_mesh, supportKg, spacingMaxed, As_flex_mesh, As_min_flex_mesh, As_shrink_mesh, governClause, ld: ld_edge, struct_scheme, tieBeamBars, tieBeamSteelKg, totalSteelKg };
 
             // Update DOM
             renderResults();
@@ -897,17 +940,36 @@
             ctxEle.strokeStyle = '#94a3b8'; ctxEle.lineWidth = 2;
             ctxEle.strokeRect(sx + clearCover, mid + sh/2, eb - 2*clearCover, eh - sh - clearCover);
 
-            // Draw Edge Longitudinal Bars (Bottom of Trench)
+            // Draw Edge Longitudinal Bars (Grid)
             ctxEle.fillStyle = '#2563eb';
-            const availableWidth = eb - 2 * clearCover;
-            const barSpacing = r.n_edge_req > 1 ? availableWidth / (r.n_edge_req - 1) : 0;
+            const nx = r.nx || 2;
+            const ny = r.ny || 2;
+            const frameX = sx + clearCover;
+            const frameY = mid + sh/2;
+            const frameW = eb - 2 * clearCover;
+            const frameH = eh - sh - clearCover;
 
-            for(let i=0; i<r.n_edge_req; i++) {
+            const dx = nx > 1 ? frameW / (nx - 1) : 0;
+            const dy = ny > 1 ? frameH / (ny - 1) : 0;
+
+            for (let i = 0; i < nx; i++) {
+                // Top row
                 ctxEle.beginPath();
-                // If only 1 bar, place in center. Otherwise, distribute.
-                const barOffX = r.n_edge_req === 1 ? eb/2 : clearCover + i * barSpacing;
-                const barY = mid + eh - sh/2 - clearCover;
-                ctxEle.arc(sx + barOffX, barY, 5, 0, 6.28);
+                ctxEle.arc(frameX + i * dx, frameY, 5, 0, 6.28);
+                ctxEle.fill();
+                // Bottom row
+                ctxEle.beginPath();
+                ctxEle.arc(frameX + i * dx, frameY + frameH, 5, 0, 6.28);
+                ctxEle.fill();
+            }
+            for (let j = 1; j < ny - 1; j++) {
+                // Left side
+                ctxEle.beginPath();
+                ctxEle.arc(frameX, frameY + j * dy, 5, 0, 6.28);
+                ctxEle.fill();
+                // Right side
+                ctxEle.beginPath();
+                ctxEle.arc(frameX + frameW, frameY + j * dy, 5, 0, 6.28);
                 ctxEle.fill();
             }
             
