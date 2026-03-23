@@ -463,11 +463,13 @@
                     {x: 0, y: 20, p: 51, h: 30}, {x: 5, y: 20, p: 102, h: 30}, {x: 10, y: 20, p: 102, h: 30}, {x: 15, y: 20, p: 102, h: 30}, {x: 20, y: 20, p: 102, h: 30}, {x: 25, y: 20, p: 51, h: 30}
                 ];
             } else if (type === '7bay') {
-                document.getElementById('L_m').value = 35;
+                document.getElementById('L_m').value = 25;
                 document.getElementById('W_m').value = 20;
                 columns = [];
-                for (let x = 0; x <= 35; x += 5) {
-                    const isCorner = (x === 0 || x === 35);
+                const spacing = 25 / 7; // ~3.57m
+                for (let i = 0; i <= 7; i++) {
+                    const x = i * spacing;
+                    const isCorner = (i === 0 || i === 7);
                     const p = isCorner ? 42 : 82;
                     columns.push({x: x, y: 0, p: p, h: 30});
                     columns.push({x: x, y: 20, p: p, h: 30});
