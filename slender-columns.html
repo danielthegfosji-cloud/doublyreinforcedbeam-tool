@@ -172,15 +172,21 @@
                     </select>
                 </div>
                 <div class="form-col">
-                    <label>Total Bars</label>
-                    <input type="number" id="nbars" value="4" min="4" step="2">
+                    <label>Cover (mm)</label>
+                    <input type="number" id="cover" value="40" min="20">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-col">
-                    <label>Cover (mm)</label>
-                    <input type="number" id="cover" value="40" min="20">
+                    <label>Bars $n_x$ (Width)</label>
+                    <input type="number" id="nx" value="2" min="2">
                 </div>
+                <div class="form-col">
+                    <label>Bars $n_y$ (Depth)</label>
+                    <input type="number" id="ny" value="3" min="2">
+                </div>
+            </div>
+            <div class="form-row">
                 <div class="form-col">
                     <label>Tie Size (mm)</label>
                     <select id="tieSize">
@@ -188,6 +194,7 @@
                         <option value="12">12 mm</option>
                     </select>
                 </div>
+                <div class="form-col"></div>
             </div>
             <button class="calc-btn" onclick="calculate()" style="margin-top: 1rem;">
                 <i class="fa-solid fa-calculator"></i> Analyze Slender Column
@@ -309,7 +316,9 @@
             
             const curvature = document.getElementById('curvature').value;
             const barDia = parseFloat(document.getElementById('barSize').value);
-            const nbars = parseInt(document.getElementById('nbars').value);
+            const nx = parseInt(document.getElementById('nx').value) || 2;
+            const ny = parseInt(document.getElementById('ny').value) || 2;
+            const totalBars = 2 * nx + 2 * (ny - 2);
             const cover = parseFloat(document.getElementById('cover').value);
             const tieDia = parseFloat(document.getElementById('tieSize').value);
 
@@ -318,20 +327,36 @@
             // 2. Geometry & Code Checks
             const Ag = b * h;
             const barArea = (Math.PI * barDia**2) / 4;
-            const As = nbars * barArea;
+            const As = totalBars * barArea;
             const rho = As / Ag;
-            let sanityHTML = (rho < 0.01) ? `<div class="status-badge status-warning">Low Reinf (ρ < 1%)</div>` : (rho > 0.08 ? `<div class="status-badge status-danger">High Reinf (ρ > 8%)</div>` : `<div class="status-badge status-success">ρ = ${(rho*100).toFixed(1)}%</div>`);
+            let sanityHTML = (rho < 0.01) ? `<div class="status-badge status-warning">Low Reinf (ρ < 1%)</div>` : (rho > 0.08 ? `<div class="status-badge status-danger">High Reinf (ρ > 8%)</div>` : `<div class="status-badge status-success">ρ = ${(rho*100).toFixed(1)}% (${nx}x${ny} grid, ${totalBars} bars)</div>`);
             document.getElementById('sanityCheckOutput').innerHTML = sanityHTML;
 
             // 3. Slenderness & Magnification (Uniaxial)
             const r = 0.3 * h;
             const lambda = (k * lu) / r;
 
-            let mRatio = Math.abs(M1 / M2 || 0);
-            if (curvature === 'double') { mRatio *= -1; }
+            // ACI 10.10.1: M2 is larger end moment, M1 is smaller.
+            let Ma = Math.abs(M1);
+            let Mb = Math.abs(M2);
+            const M2_val = Math.max(Ma, Mb);
+            const M1_val = Math.min(Ma, Mb);
+            
+            let mRatio = M1_val / (M2_val || 1);
+            // Sign Convention: Positive for single curvature, Negative for double
+            if (curvature === 'double') mRatio = -Math.abs(mRatio);
+            else mRatio = Math.abs(mRatio);
 
-            const limit = Math.min(40, 34 - 12 * mRatio);
-            const isSlender = lambda > (sway === 'braced' ? limit : 22);
+            let limit = 34 - 12 * mRatio;
+            // ACI 10.10.1 limits for braced: not more than 40.
+            // Short column threshold is 22 for unbraced.
+            if (sway === 'braced') {
+                limit = Math.min(40, Math.max(22, limit));
+            } else {
+                limit = 22;
+            }
+
+            const isSlender = lambda > limit;
 
             const Ec = 4700 * Math.sqrt(fc);
             const beta_d = 0.6; // Default sustained load ratio
@@ -355,6 +380,7 @@
                     
                     <div style="margin-bottom: 20px;">
                         <b>Bending about H-axis (Depth $h=${h}$ mm)</b><br>
+                        Reinforcement: ${nx} x ${ny} Grid (${totalBars} total bars)<br>
                         $r = 0.3h = 0.3(${h}) = ${r.toFixed(1)}$ mm<br>
                         $\\lambda = \\frac{k l_u}{r} = \\frac{${k} \\times ${lu}}{${r.toFixed(1)}} = ${lambda.toFixed(2)}$<br>
                         Limit $= 34 - 12(\\frac{M_1}{M_2}) = 34 - 12(${mRatio.toFixed(2)}) = ${limit.toFixed(1)}$<br>
@@ -380,9 +406,9 @@
             if (window.MathJax) MathJax.typesetPromise();
 
             // 5. Visuals & Interaction
-            drawSection(b, h, cover, tieDia, barDia, nbars, Mc);
+            drawSection(b, h, cover, tieDia, barDia, nx, ny, Mc);
             drawElevation(lu, k, delta, curvature, isSlender, M1, M2);
-            updateInteractionDiagram(fc, fy, b, h, cover, tieDia, barDia, nbars, Pu, Mc);
+            updateInteractionDiagram(fc, fy, b, h, cover, tieDia, barDia, nx, ny, Pu, Mc);
         }
 
         function runUnitTest() {
@@ -397,7 +423,8 @@
             document.getElementById('M1').value = 111.2;
             document.getElementById('M2').value = 116.6;
             document.getElementById('curvature').value = 'single';
-            document.getElementById('nbars').value = 4;
+            document.getElementById('nx').value = 2;
+            document.getElementById('ny').value = 2;
             document.getElementById('barSize').value = 25;
             
             calculate();
@@ -413,12 +440,29 @@
             }
         }
 
-        function updateInteractionDiagram(fc, fy, b, h, cover, tieDia, barDia, nbars, Pu_N, Mc_Nmm) {
+        function updateInteractionDiagram(fc, fy, b, h, cover, tieDia, barDia, nx, ny, Pu_N, Mc_Nmm) {
             const ctx = document.getElementById('interactionChart').getContext('2d');
             const phi = 0.65; 
             const beta1 = fc <= 28 ? 0.85 : Math.max(0.65, 0.85 - 0.05 * (fc - 28) / 7);
             const Ag = b * h;
-            const Ast = nbars * (Math.PI * barDia**2 / 4);
+            const barArea = (Math.PI * barDia**2 / 4);
+            const totalBars = 2*nx + 2*(ny-2);
+            const Ast = totalBars * barArea;
+
+            // Define Steel Layers
+            const dp = cover + tieDia + barDia/2;
+            const layers = [];
+            // Top Layer
+            layers.push({ di: dp, As: nx * barArea });
+            // Intermediate Layers
+            if (ny > 2) {
+                const spacingY = (h - 2*dp) / (ny - 1);
+                for (let i = 1; i < ny - 1; i++) {
+                    layers.push({ di: dp + i*spacingY, As: 2 * barArea });
+                }
+            }
+            // Bottom Layer
+            layers.push({ di: h - dp, As: nx * barArea });
 
             // Generate capacity curve
             const curve = [];
@@ -431,17 +475,18 @@
                 let Pn = 0.85 * fc * a * b;
                 let Mn = Pn * (h/2 - a/2);
                 
-                const dp = cover + tieDia + barDia/2;
-                const layers = [{di: dp, As: Ast/2}, {di: h-dp, As: Ast/2}];
-                
                 let et = 0;
                 layers.forEach(l => {
                     const eps = 0.003 * (c - l.di) / c;
                     let fs = Math.min(fy, Math.max(-fy, eps * 200000));
                     let force = fs * l.As;
-                    if (eps > 0 && a > l.di) force -= 0.85 * fc * l.As;
-                    Pn += force; Mn += force * (h/2 - l.di);
-                    if (l.di > h/2) et = Math.abs(eps);
+                    if (eps > 0 && a > l.di) {
+                        // Correct for concrete displaced by steel in compression
+                        force -= 0.85 * fc * l.As;
+                    }
+                    Pn += force; 
+                    Mn += force * (h/2 - l.di);
+                    if (l.di > h/2) et = Math.max(et, Math.abs(eps));
                 });
 
                 let phi_local = 0.65;
@@ -519,7 +564,7 @@
             });
         }
 
-        function drawSection(b, h, cover, tieDia, barDia, nbars, M_val) {
+        function drawSection(b, h, cover, tieDia, barDia, nx, ny, M_val) {
             const canvas = document.getElementById('sectionCanvas');
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -539,17 +584,28 @@
 
             // Bars
             ctx.fillStyle = '#0f172a';
-            const barsPerSide = Math.ceil(nbars / 2);
             const barRad = (barDia * scale) / 2;
-            const topY = y0 + (cover + tieDia)*scale + barRad;
-            const botY = y0 + h*scale - (cover + tieDia)*scale - barRad;
-            const startX_bars = x0 + (cover + tieDia)*scale + barRad;
-            const innerW = (b - 2*(cover + tieDia))*scale - barRad*2;
-            const spacingX = barsPerSide > 1 ? innerW / (barsPerSide - 1) : 0;
+            const dp = (cover + tieDia) * scale + barRad;
+            
+            const startX = x0 + dp;
+            const endX = x0 + b * scale - dp;
+            const startY = y0 + dp;
+            const endY = y0 + h * scale - dp;
 
-            for(let i=0; i<barsPerSide; i++) {
-                ctx.beginPath(); ctx.arc(startX_bars + i*spacingX, topY, barRad, 0, Math.PI*2); ctx.fill();
-                ctx.beginPath(); ctx.arc(startX_bars + i*spacingX, botY, barRad, 0, Math.PI*2); ctx.fill();
+            // Top and Bottom rows (nx bars)
+            for (let i = 0; i < nx; i++) {
+                const x = nx > 1 ? startX + i * (endX - startX) / (nx - 1) : (startX + endX) / 2;
+                ctx.beginPath(); ctx.arc(x, startY, barRad, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(x, endY, barRad, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // Intermediate rows (2 bars per row at the edges)
+            if (ny > 2) {
+                for (let j = 1; j < ny - 1; j++) {
+                    const y = startY + j * (endY - startY) / (ny - 1);
+                    ctx.beginPath(); ctx.arc(startX, y, barRad, 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(endX, y, barRad, 0, Math.PI * 2); ctx.fill();
+                }
             }
         }
 
