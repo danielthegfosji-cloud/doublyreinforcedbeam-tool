@@ -134,7 +134,6 @@
                 </div>
             </div>
 
-            <div class="section-header">Loads (Factored)</div>
             <div class="form-row">
                 <div class="form-col">
                     <label>Axial $P_u$ (kN)</label>
@@ -149,27 +148,14 @@
                 </div>
             </div>
             
-            <div style="font-size: 0.75rem; font-weight: 700; color: var(--accent); margin-top: 10px;">X-Axis Moments (kN-m)</div>
             <div class="form-row">
                 <div class="form-col">
-                    <label>$M_{1x}$ (Small)</label>
-                    <input type="number" id="M1x" value="40" step="5">
+                    <label>$M_1$ (Small)</label>
+                    <input type="number" id="M1" value="40" step="5">
                 </div>
                 <div class="form-col">
-                    <label>$M_{2x}$ (Large)</label>
-                    <input type="number" id="M2x" value="80" step="5">
-                </div>
-            </div>
-
-            <div style="font-size: 0.75rem; font-weight: 700; color: var(--accent); margin-top: 5px;">Y-Axis Moments (kN-m)</div>
-            <div class="form-row">
-                <div class="form-col">
-                    <label>$M_{1y}$ (Small)</label>
-                    <input type="number" id="M1y" value="20" step="5">
-                </div>
-                <div class="form-col">
-                    <label>$M_{2y}$ (Large)</label>
-                    <input type="number" id="M2y" value="30" step="5">
+                    <label>$M_2$ (Large)</label>
+                    <input type="number" id="M2" value="80" step="5">
                 </div>
             </div>
 
@@ -307,7 +293,6 @@
             calculate();
         }
 
-        // --- CALCULATION LOGIC ---
         function calculate() {
             // 1. Get Input Values
             const fc = parseFloat(document.getElementById('fc').value);
@@ -319,10 +304,8 @@
             const sway = document.querySelector('input[name="sway"]:checked').value;
             const Pu = parseFloat(document.getElementById('Pu').value) * 1000;
             
-            const M1x = parseFloat(document.getElementById('M1x').value) * 1e6;
-            const M2x = parseFloat(document.getElementById('M2x').value) * 1e6;
-            const M1y = parseFloat(document.getElementById('M1y').value) * 1e6;
-            const M2y = parseFloat(document.getElementById('M2y').value) * 1e6;
+            const M1 = parseFloat(document.getElementById('M1').value) * 1e6;
+            const M2 = parseFloat(document.getElementById('M2').value) * 1e6;
             
             const curvature = document.getElementById('curvature').value;
             const barDia = parseFloat(document.getElementById('barSize').value);
@@ -340,72 +323,66 @@
             let sanityHTML = (rho < 0.01) ? `<div class="status-badge status-warning">Low Reinf (ρ < 1%)</div>` : (rho > 0.08 ? `<div class="status-badge status-danger">High Reinf (ρ > 8%)</div>` : `<div class="status-badge status-success">ρ = ${(rho*100).toFixed(1)}%</div>`);
             document.getElementById('sanityCheckOutput').innerHTML = sanityHTML;
 
-            // 3. Slenderness & Magnification (Biaxial)
-            const r_x = 0.3 * h;
-            const r_y = 0.3 * b;
-            const lambda_x = (k * lu) / r_x;
-            const lambda_y = (k * lu) / r_y;
+            // 3. Slenderness & Magnification (Uniaxial)
+            const r = 0.3 * h;
+            const lambda = (k * lu) / r;
 
-            let mRatioX = Math.abs(M1x / M2x || 0);
-            let mRatioY = Math.abs(M1y / M2y || 0);
-            if (curvature === 'double') { mRatioX *= -1; mRatioY *= -1; }
+            let mRatio = Math.abs(M1 / M2 || 0);
+            if (curvature === 'double') { mRatio *= -1; }
 
-            const limitX = Math.min(40, 34 - 12 * mRatioX);
-            const limitY = Math.min(40, 34 - 12 * mRatioY);
-
-            const isSlenderX = lambda_x > (sway === 'braced' ? limitX : 22);
-            const isSlenderY = lambda_y > (sway === 'braced' ? limitY : 22);
+            const limit = Math.min(40, 34 - 12 * mRatio);
+            const isSlender = lambda > (sway === 'braced' ? limit : 22);
 
             const Ec = 4700 * Math.sqrt(fc);
-            const beta_d = 0.6; // Default sustained load
-            const Ig_x = (b * h**3) / 12;
-            const Ig_y = (h * b**3) / 12;
-            const EI_x = (0.4 * Ec * Ig_x) / (1 + beta_d);
-            const EI_y = (0.4 * Ec * Ig_y) / (1 + beta_d);
+            const beta_d = 0.6; // Default sustained load ratio
+            const Ig = (b * h**3) / 12;
+            const EI = (0.4 * Ec * Ig) / (1 + beta_d);
 
-            const Pc_x = (Math.PI**2 * EI_x) / (k * lu)**2;
-            const Pc_y = (Math.PI**2 * EI_y) / (k * lu)**2;
-
-            const Cm_x = Math.max(0.4, 0.6 + 0.4 * mRatioX);
-            const Cm_y = Math.max(0.4, 0.6 + 0.4 * mRatioY);
+            const Pc = (Math.PI**2 * EI) / (k * lu)**2;
+            const Cm = Math.max(0.4, 0.6 + 0.4 * mRatio);
 
             const phiK = 0.75;
-            let delta_x = isSlenderX ? Cm_x / (1 - Pu / (phiK * Pc_x)) : 1.0;
-            let delta_y = isSlenderY ? Cm_y / (1 - Pu / (phiK * Pc_y)) : 1.0;
-            delta_x = Math.max(1.0, delta_x); delta_y = Math.max(1.0, delta_y);
+            let delta = isSlender ? Cm / (1 - Pu / (phiK * Pc)) : 1.0;
+            delta = Math.max(1.0, delta);
 
-            const M_min_x = Pu * (15 + 0.03 * h);
-            const M_min_y = Pu * (15 + 0.03 * b);
+            const M_min = Pu * (15 + 0.03 * h);
+            const Mc = delta * Math.max(Math.abs(M2), M_min);
 
-            const Mcx = delta_x * Math.max(Math.abs(M2x), M_min_x);
-            const Mcy = delta_y * Math.max(Math.abs(M2y), M_min_y);
-
-            // 4. Report & UI
+            // 4. Detailed Calculation Report
             let calcLog = `
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div>
-                        <b>X-Axis Magnification</b><br>
-                        $\\lambda_x = ${lambda_x.toFixed(1)}$ (${isSlenderX?'Slender':'Short'})<br>
-                        $P_{cx} = ${(Pc_x/1000).toFixed(0)} kN$<br>
-                        $\\delta_{ns,x} = ${delta_x.toFixed(2)}$
+                <div class="math-block">
+                    <div style="font-weight:700; color:var(--accent); margin-bottom:10px; border-bottom:1px solid #eee;">Step 1: Slenderness Check (ACI 10.10.1)</div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <b>Bending about H-axis (Depth $h=${h}$ mm)</b><br>
+                        $r = 0.3h = 0.3(${h}) = ${r.toFixed(1)}$ mm<br>
+                        $\\lambda = \\frac{k l_u}{r} = \\frac{${k} \\times ${lu}}{${r.toFixed(1)}} = ${lambda.toFixed(2)}$<br>
+                        Limit $= 34 - 12(\\frac{M_1}{M_2}) = 34 - 12(${mRatio.toFixed(2)}) = ${limit.toFixed(1)}$<br>
+                        Result: <b>${isSlender?'Slender':'Short'}</b>
                     </div>
-                    <div>
-                        <b>Y-Axis Magnification</b><br>
-                        $\\lambda_y = ${lambda_y.toFixed(1)}$ (${isSlenderY?'Slender':'Short'})<br>
-                        $P_{cy} = ${(Pc_y/1000).toFixed(0)} kN$<br>
-                        $\\delta_{ns,y} = ${delta_y.toFixed(2)}$
+
+                    <div style="font-weight:700; color:var(--accent); margin-top:20px; margin-bottom:10px; border-bottom:1px solid #eee;">Step 2: Moment Magnification (ACI 10.10.6)</div>
+                    <div style="margin-bottom: 20px;">
+                        $EI_{eff} = \\frac{0.4 E_c I_g}{1+\\beta_d} = \\frac{0.4(${Math.round(Ec)})(${Ig.toExponential(2)})}{1+0.6} = ${(EI/1e9).toFixed(2)} \\times 10^9 \\text{ N-mm}^2$<br>
+                        $P_{c} = \\frac{\\pi^2 EI}{(k l_u)^2} = \\frac{\\pi^2(${(EI/1e9).toFixed(2)}\\cdot 10^9)}{(${k}\\cdot${lu})^2} = ${(Pc/1000).toFixed(1)} \\text{ kN}$<br>
+                        $C_m = 0.6 + 0.4(M_1/M_2) = ${Cm.toFixed(2)}$<br>
+                        $\\delta_{ns} = \\frac{C_m}{1 - P_u/(0.75 P_c)} = \\frac{${Cm.toFixed(2)}}{1 - ${Math.round(Pu/1000)}/(0.75 \\cdot ${(Pc/1000).toFixed(1)})} = \\mathbf{${delta.toFixed(2)}}$
                     </div>
+
+                    <div style="font-weight:700; color:var(--accent); margin-top:20px; margin-bottom:10px; border-bottom:1px solid #eee;">Step 3: Design Moment ($M_c$)</div>
+                    $M_{min} = P_u(15+0.03h) = ${(Pu/1000).toFixed(0)}(15+0.03\\cdot${h}) = ${(M_min/1e6).toFixed(1)} \\text{ kNm}$<br>
+                    $M_{c} = \\delta_{ns} \\cdot \\max(M_{2}, M_{min}) = ${delta.toFixed(2)} \\cdot ${(Math.max(Math.abs(M2), M_min)/1e6).toFixed(1)} = \\mathbf{${(Mc/1e6).toFixed(2)} \\text{ kN-m}}$
                 </div>
             `;
             document.getElementById('slendernessOutput').innerHTML = calcLog;
-            document.getElementById('finalMoment').innerText = `Mcx: ${(Mcx/1e6).toFixed(1)} / Mcy: ${(Mcy/1e6).toFixed(1)} kN-m`;
+            document.getElementById('finalMoment').innerText = `${(Mc/1e6).toFixed(1)} kN-m`;
 
             if (window.MathJax) MathJax.typesetPromise();
 
-            // 5. Visuals & Interaction (Reciprocal Load Check)
-            drawSection(b, h, cover, tieDia, barDia, nbars, Mcx, Mcy);
-            drawElevation(lu, k, delta_x, curvature, isSlenderX, M1x, M2x);
-            updateInteractionDiagram(fc, fy, b, h, cover, tieDia, barDia, nbars, Pu, Mcx, Mcy);
+            // 5. Visuals & Interaction
+            drawSection(b, h, cover, tieDia, barDia, nbars, Mc);
+            drawElevation(lu, k, delta, curvature, isSlender, M1, M2);
+            updateInteractionDiagram(fc, fy, b, h, cover, tieDia, barDia, nbars, Pu, Mc);
         }
 
         function runUnitTest() {
@@ -422,81 +399,35 @@
             document.getElementById('curvature').value = 'single';
             document.getElementById('nbars').value = 4;
             document.getElementById('barSize').value = 25;
-            document.getElementById('betadns').value = 0.327;
             
-            const results = calculate();
+            calculate();
             
+            const Mc_val = parseFloat(document.getElementById('finalMoment').innerText);
             const expectedMc = 127.1;
-            const pass = Math.abs((results.Mc / 1e6) - expectedMc) < 2.0;
+            const pass = Math.abs(Mc_val - expectedMc) < 2.0;
 
             if (pass) {
-                alert("✅ Unit Test Passed!\n\nParameters set to Example 11.3.\nExpected Mc: ~127 kN-m.\nCalculated: " + (results.Mc / 1e6).toFixed(1) + " kN-m.\n\nResults match textbook derivations.");
+                alert("✅ Unit Test Passed!\n\nParameters set to Example 11.3.\nExpected Mc: ~127 kN-m.\nCalculated: " + Mc_val.toFixed(1) + " kN-m.\n\nResults match textbook derivations.");
             } else {
-                alert("❌ Unit Test Failed!\n\nExpected: ~" + expectedMc + " kN-m\nCalculated: " + (results.Mc / 1e6).toFixed(1) + " kN-m");
+                alert("❌ Unit Test Failed!\n\nExpected: ~" + expectedMc + " kN-m\nCalculated: " + Mc_val.toFixed(1) + " kN-m");
             }
         }
 
-        function updateInteractionDiagram(fc, fy, b, h, cover, tieDia, barDia, nbars, Pu_N, Mcx_Nmm, Mcy_Nmm) {
+        function updateInteractionDiagram(fc, fy, b, h, cover, tieDia, barDia, nbars, Pu_N, Mc_Nmm) {
             const ctx = document.getElementById('interactionChart').getContext('2d');
-            
-            function getUniaxialPn(width, depth, eccentricity_mm) {
-                const d_prime = cover + tieDia + barDia/2;
-                const d = depth - d_prime;
-                const As_layer = (nbars / 2) * (Math.PI * barDia**2 / 4);
-                const Es = 200000;
-                const ec_lim = 0.003;
-                const beta1 = fc <= 28 ? 0.85 : Math.max(0.65, 0.85 - 0.05 * (fc - 28) / 7);
-
-                let bestPn = 1;
-                for (let c = 1; c < depth * 3; c += depth / 40) {
-                    let a = Math.min(depth, beta1 * c);
-                    let Cc = 0.85 * fc * a * width;
-                    let Pn = Cc;
-                    let Mn = Cc * (depth/2 - a/2);
-
-                    const layers = [{ d_i: d_prime, As: As_layer }, { d_i: d, As: As_layer }];
-                    layers.forEach(l => {
-                        const eps = ec_lim * (c - l.d_i) / c;
-                        let fs = Math.min(fy, Math.max(-fy, eps * Es));
-                        let force = fs * l.As;
-                        if (eps > 0 && a > l.d_i) force -= 0.85 * fc * l.As;
-                        Pn += force; Mn += force * (depth/2 - l.d_i);
-                    });
-                    if (Pn > 0 && (Mn / Pn) >= eccentricity_mm) { bestPn = Pn; break; }
-                }
-                return bestPn;
-            }
-
-            const ex = Math.abs(Mcx_Nmm / Pu_N) || 0.1;
-            const ey = Math.abs(Mcy_Nmm / Pu_N) || 0.1;
-            const Pnx = getUniaxialPn(b, h, ex);
-            const Pny = getUniaxialPn(h, b, ey);
-            const Ast = nbars * (Math.PI * barDia**2) / 4;
-            const P0 = 0.85 * fc * (b * h - Ast) + fy * Ast;
             const phi = 0.65; 
-
-            const invPn = (1/Pnx) + (1/Pny) - (1/P0);
-            const phiPn = phi * (1 / invPn);
-            const dcRatio = (Pu_N / phiPn);
-            const isSafe = dcRatio <= 1.0;
-
-            document.getElementById('capacityCheckResult').innerHTML = `
-                <div class="status-box ${isSafe?'status-success':'status-danger'}" style="padding:15px; border-radius:8px; background:${isSafe?'#d1fae5':'#fee2e2'}; color:${isSafe?'#065f46':'#991b1b'};">
-                    <i class="fa-solid ${isSafe?'fa-circle-check':'fa-circle-xmark'}"></i>
-                    <strong>${isSafe?'SAFE':'UNSAFE'}:</strong> Biaxial D/C Ratio (Bresler): <strong>${dcRatio.toFixed(3)}</strong><br>
-                    <small>Factored Capacity $\\phi P_n$ = ${(phiPn/1000).toFixed(1)} kN vs Demand $P_u$ = ${(Pu_N/1000).toFixed(1)} kN</small>
-                </div>
-            `;
-
-            // Visualization: Generate X-axis capacity curve
-            const curve = [];
             const beta1 = fc <= 28 ? 0.85 : Math.max(0.65, 0.85 - 0.05 * (fc - 28) / 7);
-            for(let c=10; c < h*2; c += h/20) {
+
+            // Generate X-axis capacity curve
+            const curve = [];
+            for(let c=10; c < h*2.5; c += h/20) {
                 let a = Math.min(h, beta1 * c);
                 let Pn = 0.85 * fc * a * b;
                 let Mn = Pn * (h/2 - a/2);
                 const d_p = cover + tieDia + barDia/2;
-                [{d_i: d_p, As: (nbars/2)*Math.PI*barDia**2/4}, {d_i: h-d_p, As: (nbars/2)*Math.PI*barDia**2/4}].forEach(l => {
+                const As_side = (nbars / 2) * (Math.PI * barDia**2 / 4);
+
+                [{d_i: d_p, As: As_side}, {d_i: h-d_p, As: As_side}].forEach(l => {
                     const eps = 0.003 * (c - l.d_i) / c;
                     let fs = Math.min(fy, Math.max(-fy, eps * 200000));
                     let force = fs * l.As;
@@ -506,20 +437,41 @@
                 if (Pn > 0) curve.push({ x: (phi * Mn) / 1e6, y: (phi * Pn) / 1000 });
             }
 
+            // Find capacity at given Pu for D/C ratio
+            let Mcap = 0;
+            const Pu_kN = Pu_N / 1000;
+            for(let i=0; i<curve.length-1; i++) {
+                if((curve[i].y >= Pu_kN && curve[i+1].y <= Pu_kN) || (curve[i].y <= Pu_kN && curve[i+1].y >= Pu_kN)) {
+                    Mcap = curve[i].x + (curve[i+1].x - curve[i].x) * (Pu_kN - curve[i].y) / (curve[i+1].y - curve[i].y);
+                    break;
+                }
+            }
+
+            const dcRatio = (Mc_Nmm / 1e6) / Mcap;
+            const isSafe = dcRatio <= 1.0 && Pu_kN <= curve[0].y;
+
+            document.getElementById('capacityCheckResult').innerHTML = `
+                <div class="status-box ${isSafe?'status-success':'status-danger'}" style="padding:15px; border-radius:8px; background:${isSafe?'#d1fae5':'#fee2e2'}; color:${isSafe?'#065f46':'#991b1b'};">
+                    <i class="fa-solid ${isSafe?'fa-circle-check':'fa-circle-xmark'}"></i>
+                    <strong>${isSafe?'SAFE':'UNSAFE'}:</strong> Uniaxial D/C Ratio: <strong>${dcRatio.toFixed(3)}</strong><br>
+                    <small>Moment Capacity $\\phi M_n$ = ${Mcap.toFixed(1)} kN-m vs Demand $M_c$ = ${(Mc_Nmm/1e6).toFixed(1)} kN-m</small>
+                </div>
+            `;
+
             if (interactionChart) interactionChart.destroy();
             interactionChart = new Chart(ctx, {
                 type: 'scatter',
                 data: {
                     datasets: [
-                        { label: 'Uniaxial Capacity (X)', data: curve, borderColor: '#3b82f6', showLine: true, pointRadius: 0, fill: true, backgroundColor: 'rgba(59, 130, 246, 0.05)' },
-                        { label: 'Design Point (Biaxial)', data: [{ x: (Mcx_Nmm/1e6), y: (Pu_N/1000) }], backgroundColor: isSafe?'#10b981':'#ef4444', pointRadius: 8 }
+                        { label: 'Design Capacity (φPn vs φMn)', data: curve, borderColor: '#3b82f6', showLine: true, pointRadius: 0, fill: true, backgroundColor: 'rgba(59, 130, 246, 0.05)' },
+                        { label: 'Design Point (Mc, Pu)', data: [{ x: (Mc_Nmm/1e6), y: (Pu_N/1000) }], backgroundColor: isSafe?'#10b981':'#ef4444', pointRadius: 8 }
                     ]
                 },
                 options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Moment (kN-m)' }, min: 0 }, y: { title: { display: true, text: 'Axial Load (kN)' }, min: 0 } } }
             });
         }
 
-        function drawSection(b, h, cover, tieDia, barDia, nbars, M1_val, M2_val) {
+        function drawSection(b, h, cover, tieDia, barDia, nbars, M_val) {
             const canvas = document.getElementById('sectionCanvas');
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);

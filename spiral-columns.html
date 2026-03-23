@@ -223,6 +223,7 @@
             document.getElementById('sanityCheckOutput').innerHTML = rhoLog + " " + spiralLog;
 
             document.getElementById('calcOutput').innerHTML = `
+                $$ M_u = \\sqrt{M_{ux}^2 + M_{uy}^2} = \\sqrt{${(Mux/1e6).toFixed(1)}^2 + ${(Muy/1e6).toFixed(1)}^2} = ${Mu_kNm.toFixed(1)} \\text{ kN-m} $$
                 $$ P_0 = 0.85 f'_c (A_g - A_{st}) + f_y A_{st} = ${(P0/1000).toFixed(0)} \\text{ kN} $$
                 $$ \\phi P_{n,max} = 0.85(0.75) P_0 = ${(PhiPn_max/1000).toFixed(0)} \\text{ kN} $$
                 $$ \\rho_s = \\frac{4 A_{sp}}{D_c s} = ${rho_s_provided.toFixed(4)} \\text{ (Req: ${rho_s_required.toFixed(4)})} $$
