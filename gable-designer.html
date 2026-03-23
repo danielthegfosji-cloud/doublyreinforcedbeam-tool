@@ -471,24 +471,37 @@
             const P_reaction = (w_factored * L) / 2;
             
             renderReactions(P_reaction, H_thrust);
+            
+            const baseDepth = 200; // Hardcoded practical minimum
+            const apexDepth = 200; // Hardcoded practical minimum
+            const eaveDepth = taperedDepth;
+
             document.getElementById('memberResults').innerHTML = `
-                <div style="font-size:0.75rem; font-weight:700; color:#475569; margin-bottom:5px;">TAPERED OPTIMIZED</div>
+                <div style="font-size:0.75rem; font-weight:700; color:var(--accent); margin-bottom:5px;">COLUMN (Tapered)</div>
+                <table class="result-table" style="margin-bottom:15px;">
+                    <tr><td>Profile</td><td>Built-Up Plate</td></tr>
+                    <tr><td>Base Depth ($d_{base}$)</td><td>${baseDepth.toFixed(0)} mm</td></tr>
+                    <tr><td>Eave Depth ($d_{eave}$)</td><td><strong>${eaveDepth.toFixed(0)} mm</strong></td></tr>
+                    <tr><td>Flanges</td><td>${bf}x${tf} mm</td></tr>
+                    <tr><td>Web</td><td>${tw} mm</td></tr>
+                </table>
+
+                <div style="font-size:0.75rem; font-weight:700; color:var(--accent); margin-bottom:5px;">RAFTER (Tapered)</div>
                 <table class="result-table">
-                    <tr><td>Eave Depth $d$</td><td>${taperedDepth.toFixed(0)} mm</td></tr>
-                    <tr><td>Flange Plate</td><td>200x12 mm</td></tr>
-                    <tr><td>Web Plate</td><td>8 mm</td></tr>
-                    <tr><td>$M_u$ (Eave)</td><td>${Mu.toFixed(1)} kNm</td></tr>
+                    <tr><td>Profile</td><td>Built-Up Plate</td></tr>
+                    <tr><td>Eave Depth ($d_{eave}$)</td><td><strong>${eaveDepth.toFixed(0)} mm</strong></td></tr>
+                    <tr><td>Apex Depth ($d_{apex}$)</td><td>${apexDepth.toFixed(0)} mm</td></tr>
+                    <tr><td>Flanges</td><td>${bf}x${tf} mm</td></tr>
+                    <tr><td>Web</td><td>${tw} mm</td></tr>
                 </table>
                 <div style="margin-top:15px; font-size:0.7rem; color:var(--text-sub); border-top:1px solid #eee; padding-top:10px;">
                     <b>Design Basis (Tapered):</b><br>
                     Yielding: $M_u \\leq \\phi F_y Z_x$ where $\\phi=0.9$<br>
                     Section Modulus $Z_x \\approx b_f t_f d + \\frac{1}{4} t_w d^2$<br>
-                    Solved via quadratic for optimal $d$.
+                    Solved via quadratic for optimal $d_{eave}$.
                 </div>
-                `;
-                if (window.MathJax && MathJax.typesetPromise) {
-                MathJax.typesetPromise().catch(err => console.log('MathJax error:', err));
-                }
+            `;
+            if (window.MathJax) MathJax.typesetPromise();
             renderSummary(L, He, Ha, pitchDeg, "Built-Up", "Built-Up");
             drawFrame(L, He, Ha);
         }
