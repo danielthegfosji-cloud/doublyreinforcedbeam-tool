@@ -137,6 +137,25 @@
         }
         .btn-action:hover { opacity: 0.9; }
 
+        .loader-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.8);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid var(--border);
+            border-top: 4px solid var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
         /* --- RIGHT PANEL --- */
         .results-panel {
             display: flex;
@@ -222,8 +241,13 @@
             <a href="index.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Suite</a>
             <span class="nav-title"><i class="fa-solid fa-draw-polygon"></i> Steel Gable Designer</span>
         </div>
-        <div style="font-size: 0.8rem; opacity: 0.8;">AISC 360-16 LRFD Engine v1.0</div>
+        <div style="font-size: 0.8rem; opacity: 0.8;">AISC 360-16 LRFD Engine v1.1</div>
     </nav>
+
+    <div id="loader" class="loader-overlay">
+        <div class="spinner"></div>
+        <p style="margin-top: 15px; font-weight: 600; color: var(--primary);">Optimizing Steel Sections...</p>
+    </div>
 
     <div class="container">
         <!-- Sidebar -->
@@ -289,6 +313,7 @@
             </div>
 
             <button class="btn-action" onclick="analyzeFrame()">Analyze Frame</button>
+            <button class="btn-action" style="background: var(--primary); margin-top: 8px;" onclick="optimizeFrame()">Optimize Sections (Lightest)</button>
         </aside>
 
         <!-- Main Content -->
@@ -328,15 +353,9 @@
                 const data = new Uint8Array(arrayBuffer);
                 const workbook = XLSX.read(data, {type: 'array'});
                 
-                // Select the Database sheet (usually the second one in v16.0)
                 const sheetName = workbook.SheetNames.find(n => n.includes('Database')) || workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
                 aiscDb = XLSX.utils.sheet_to_json(worksheet);
-                
-                if (aiscDb.length > 0) {
-                    console.log("AISC DB Loaded. Sheet:", sheetName);
-                    console.log("AISC DB Keys:", Object.keys(aiscDb[0]));
-                }
                 
                 populateSections();
                 document.getElementById('dbStatus').innerHTML = `<i class="fa-solid fa-check-circle"></i> AISC Database Loaded (${aiscDb.length} shapes)`;
@@ -356,32 +375,19 @@
         function populateSections() {
             const colSelect = document.getElementById('col_section');
             const rafSelect = document.getElementById('raf_section');
-            
             if (aiscDb.length === 0) return;
 
-            // Property Mapping (Handle variations in AISC Excel headers)
-            // Common keys: Type, AISC_Manual_Label
             const sample = aiscDb[0];
             const typeKey = Object.keys(sample).find(k => k.toLowerCase() === 'type') || 'Type';
             const labelKey = Object.keys(sample).find(k => k.toLowerCase() === 'aisc_manual_label') || 'AISC_Manual_Label';
 
-            // Filter only W shapes for simplicity in this module
             const wShapes = aiscDb.filter(s => s[typeKey] === 'W');
-            
-            if (wShapes.length === 0) {
-                console.warn("No W shapes found in database.");
-                return;
-            }
-
             const options = wShapes.map(s => `<option value="${s[labelKey]}">${s[labelKey]}</option>`).join('');
             colSelect.innerHTML = options;
             rafSelect.innerHTML = options;
             
-            // Set some common defaults if they exist
-            if (wShapes.find(s => s[labelKey] === 'W12X26')) {
-                colSelect.value = 'W12X26';
-                rafSelect.value = 'W12X26';
-            }
+            colSelect.value = 'W12X26';
+            rafSelect.value = 'W12X26';
         }
 
         function analyzeFrame() {
@@ -394,23 +400,18 @@
             const spacing = parseFloat(document.getElementById('spacing_m').value);
             const fy = parseFloat(document.getElementById('steel_fy').value);
             
-            // Compute Pitch
             const rise = Ha - He;
             const run = L / 2;
             const pitch = Math.atan2(rise, run);
             const pitchDeg = pitch * 180 / Math.PI;
 
-            const rafterAngle = pitch;
-            const rafterLen = (L / 2) / Math.cos(rafterAngle);
-            const peakH = Ha;
-
             // 2. Loads
             const dl = parseFloat(document.getElementById('dl_kpa').value);
             const ll = parseFloat(document.getElementById('ll_kpa').value);
+            const w_factored = (1.2 * dl + 1.6 * ll) * spacing;
             
-            const w_factored = (1.2 * dl + 1.6 * ll) * spacing; // kN/m
-            const P_reaction = (w_factored * L) / 2; // kN
-            const H_thrust = (w_factored * Math.pow(L, 2)) / (8 * peakH); // kN
+            const P_reaction = (w_factored * L) / 2; 
+            const H_thrust = (w_factored * Math.pow(L, 2)) / (8 * Ha);
 
             // 3. Member Check
             const colLabel = document.getElementById('col_section').value;
@@ -420,138 +421,133 @@
             const colShape = aiscDb.find(s => s[labelKey] === colLabel);
             const rafShape = aiscDb.find(s => s[labelKey] === rafLabel);
 
-            // Column: Peak moment at eave
             const M_col = H_thrust * He; 
             const colRatio = checkMember(colShape, P_reaction, M_col, fy);
 
-            // Rafter: Max moment approx at mid-rafter or peak depending on fixity
             const M_raf = M_col; 
-            const rafRatio = checkMember(rafShape, P_reaction / Math.sin(rafterAngle), M_raf, fy);
+            const rafRatio = checkMember(rafShape, P_reaction / Math.sin(pitch), M_raf, fy);
 
-            // 4. Render Results
             renderReactions(P_reaction, H_thrust);
             renderIntegrity(colRatio, rafRatio, colLabel, rafLabel);
             renderSummary(L, He, Ha, pitchDeg, colLabel, rafLabel);
             drawFrame(L, He, Ha);
         }
 
+        function optimizeFrame() {
+            if (aiscDb.length === 0) return;
+            const loader = document.getElementById('loader');
+            loader.style.display = 'flex';
+
+            setTimeout(() => {
+                const L = parseFloat(document.getElementById('span_m').value);
+                const He = parseFloat(document.getElementById('eave_m').value);
+                const Ha = parseFloat(document.getElementById('apex_m').value);
+                const spacing = parseFloat(document.getElementById('spacing_m').value);
+                const fy = parseFloat(document.getElementById('steel_fy').value);
+                const dl = parseFloat(document.getElementById('dl_kpa').value);
+                const ll = parseFloat(document.getElementById('ll_kpa').value);
+                
+                const w_factored = (1.2 * dl + 1.6 * ll) * spacing;
+                const pitch = Math.atan2(Ha - He, L / 2);
+                const P_reaction = (w_factored * L) / 2;
+                const H_thrust = (w_factored * Math.pow(L, 2)) / (8 * Ha);
+                const M_max = H_thrust * He;
+
+                const labelKey = Object.keys(aiscDb[0] || {}).find(k => k.toLowerCase() === 'aisc_manual_label') || 'AISC_Manual_Label';
+                const typeKey = Object.keys(aiscDb[0] || {}).find(k => k.toLowerCase() === 'type') || 'Type';
+                const weightKey = Object.keys(aiscDb[0] || {}).find(k => k.toLowerCase() === 'w') || 'W';
+
+                const candidates = aiscDb
+                    .filter(s => s[typeKey] === 'W')
+                    .sort((a, b) => parseFloat(a[weightKey]) - parseFloat(b[weightKey]));
+
+                let bestCol = null;
+                let bestRaf = null;
+
+                for (let shape of candidates) {
+                    if (checkMember(shape, P_reaction, M_max, fy) < 1.0) {
+                        bestCol = shape[labelKey];
+                        break;
+                    }
+                }
+
+                for (let shape of candidates) {
+                    const P_raf = P_reaction / Math.sin(pitch);
+                    if (checkMember(shape, P_raf, M_max, fy) < 1.0) {
+                        bestRaf = shape[labelKey];
+                        break;
+                    }
+                }
+
+                if (bestCol) document.getElementById('col_section').value = bestCol;
+                if (bestRaf) document.getElementById('raf_section').value = bestRaf;
+
+                loader.style.display = 'none';
+                analyzeFrame();
+            }, 500);
+        }
+
         function checkMember(shape, P, M, Fy) {
-            if (!shape) return 0;
-            
+            if (!shape) return 999;
             const aKey = Object.keys(shape).find(k => k === 'A' || k === 'Area') || 'A';
             const sxKey = Object.keys(shape).find(k => k === 'Sx' || k === 'S_x') || 'Sx';
             const zxKey = Object.keys(shape).find(k => k === 'Zx' || k === 'Z_x') || 'Zx';
             
-            const Ag = parseFloat(shape[aKey]) * 645.16; // mm2
-            const Sx = parseFloat(shape[sxKey]) * 16387.06; // mm3
-            const Zx = parseFloat(shape[zxKey]) * 16387.06; // mm3 (Plastic Modulus)
+            const Ag = parseFloat(shape[aKey]) * 645.16;
+            const Sx = parseFloat(shape[sxKey]) * 16387.06;
+            const Zx = parseFloat(shape[zxKey]) * 16387.06;
 
-            if (isNaN(Ag) || isNaN(Sx)) return 0;
+            if (isNaN(Ag) || isNaN(Sx)) return 999;
 
-            // AISC LRFD Simplified: Mn = min(Fy*Zx, 1.6*Fy*Sx)
-            const Mn = Math.min(Fy * Zx, 1.6 * Fy * Sx) / 1e6; // kNm
-            const Pn = (Fy * Ag) / 1000; // kN
-            
-            const axialRatio = (P) / (0.9 * Pn);
-            const bendingRatio = (M) / (0.9 * Mn);
-            
-            return axialRatio + bendingRatio;
+            const Mn = Math.min(Fy * Zx, 1.6 * Fy * Sx) / 1e6;
+            const Pn = (Fy * Ag) / 1000;
+            return (P / (0.9 * Pn)) + (M / (0.9 * Mn));
         }
 
         function renderReactions(P, H) {
-            document.getElementById('reactionResults').innerHTML = `
-                <table class="result-table">
-                    <tr><td>Vertical $P_u$</td><td>${P.toFixed(1)} kN</td></tr>
-                    <tr><td>Horizontal $H_u$</td><td>${H.toFixed(1)} kN</td></tr>
-                    <tr><td>Moment $M_u$</td><td>0.0 kNm (Pinned)</td></tr>
-                </table>
-                <p style="font-size: 0.75rem; color: var(--text-sub); margin-top: 10px;">
-                    Note: These reactions should be used in the <b>Thickened Slab</b> module for foundation design.
-                </p>
-            `;
+            document.getElementById('reactionResults').innerHTML = `<table class="result-table"><tr><td>Vertical $P_u$</td><td>${P.toFixed(1)} kN</td></tr><tr><td>Horizontal $H_u$</td><td>${H.toFixed(1)} kN</td></tr><tr><td>Moment $M_u$</td><td>0.0 kNm (Pinned)</td></tr></table>`;
         }
 
         function renderIntegrity(colRatio, rafRatio, colName, rafName) {
             const colStatus = colRatio < 1.0 ? 'status-success' : 'status-danger';
             const rafStatus = rafRatio < 1.0 ? 'status-success' : 'status-danger';
-            
-            document.getElementById('memberResults').innerHTML = `
-                <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">COLUMN: ${colName}</div>
-                <div style="margin-bottom: 10px;"><span class="status-badge ${colStatus}">${colRatio < 1.0 ? 'OK' : 'FAIL'}</span></div>
-                <table class="result-table" style="margin-bottom:15px;">
-                    <tr><td>Interaction Ratio</td><td>${(colRatio * 100).toFixed(1)}%</td></tr>
-                </table>
-
-                <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">RAFTER: ${rafName}</div>
-                <div style="margin-bottom: 10px;"><span class="status-badge ${rafStatus}">${rafRatio < 1.0 ? 'OK' : 'FAIL'}</span></div>
-                <table class="result-table">
-                    <tr><td>Interaction Ratio</td><td>${(rafRatio * 100).toFixed(1)}%</td></tr>
-                </table>
-            `;
+            document.getElementById('memberResults').innerHTML = `<div style="font-size:0.7rem; font-weight:700;">COL: ${colName}</div><div style="margin-bottom:5px;"><span class="status-badge ${colStatus}">${(colRatio*100).toFixed(1)}%</span></div><div style="font-size:0.7rem; font-weight:700; margin-top:10px;">RAF: ${rafName}</div><div><span class="status-badge ${rafStatus}">${(rafRatio*100).toFixed(1)}%</span></div>`;
         }
 
-        function renderSummary(L, He, Ph, col, raf) {
-            document.getElementById('summaryResults').innerHTML = `
-                <table class="result-table">
-                    <tr><td>Span</td><td>${L} m</td></tr>
-                    <tr><td>Eave Height</td><td>${He} m</td></tr>
-                    <tr><td>Peak Height</td><td>${Ph.toFixed(2)} m</td></tr>
-                    <tr><td>Col Section</td><td>${col}</td></tr>
-                    <tr><td>Raf Section</td><td>${raf}</td></tr>
-                </table>
-            `;
+        function renderSummary(L, He, Ha, pitch, col, raf) {
+            document.getElementById('summaryResults').innerHTML = `<table class="result-table"><tr><td>Apex Height</td><td>${Ha} m</td></tr><tr><td>Pitch</td><td>${pitch.toFixed(1)}°</td></tr><tr><td>Col</td><td>${col}</td></tr><tr><td>Raf</td><td>${raf}</td></tr></table>`;
         }
 
-        function drawFrame(L, He, Ph) {
+        function drawFrame(L, He, Ha) {
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
-            const cw = canvas.width;
-            const ch = canvas.height;
-            ctx.clearRect(0, 0, cw, ch);
-
             const margin = 40;
-            const scale = Math.min((cw - margin * 2) / L, (ch - margin * 2) / Ph);
-            const dx = (cw - L * scale) / 2;
-            const dy = ch - margin;
+            const scale = Math.min((canvas.width - margin * 2) / L, (canvas.height - margin * 2) / Ha);
+            const dx = (canvas.width - L * scale) / 2;
+            const dy = canvas.height - margin;
 
-            ctx.strokeStyle = varColor('--primary');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#0f172a';
             ctx.lineWidth = 4;
             ctx.lineJoin = 'round';
 
-            // Ground line
             ctx.beginPath();
-            ctx.strokeStyle = varColor('--border');
-            ctx.moveTo(margin, dy);
-            ctx.lineTo(cw - margin, dy);
+            ctx.moveTo(dx, dy);
+            ctx.lineTo(dx, dy - He * scale);
+            ctx.lineTo(dx + (L / 2) * scale, dy - Ha * scale);
+            ctx.lineTo(dx + L * scale, dy - He * scale);
+            ctx.lineTo(dx + L * scale, dy);
             ctx.stroke();
 
-            // Frame Path
-            ctx.beginPath();
-            ctx.strokeStyle = varColor('--primary');
-            ctx.moveTo(dx, dy); // Base Left
-            ctx.lineTo(dx, dy - He * scale); // Eave Left
-            ctx.lineTo(dx + (L / 2) * scale, dy - Ph * scale); // Peak
-            ctx.lineTo(dx + L * scale, dy - He * scale); // Eave Right
-            ctx.lineTo(dx + L * scale, dy); // Base Right
-            ctx.stroke();
-
-            // Draw Base Supports (Pins)
             drawPin(dx, dy);
             drawPin(dx + L * scale, dy);
         }
 
         function drawPin(x, y) {
             ctx.beginPath();
-            ctx.fillStyle = varColor('--text-sub');
-            ctx.moveTo(x, y);
-            ctx.lineTo(x - 8, y + 10);
-            ctx.lineTo(x + 8, y + 10);
-            ctx.closePath();
-            ctx.fill();
-        }
-
-        function varColor(name) {
-            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+            ctx.fillStyle = '#64748b';
+            ctx.moveTo(x, y); ctx.lineTo(x - 8, y + 10); ctx.lineTo(x + 8, y + 10);
+            ctx.closePath(); ctx.fill();
         }
 
         window.onload = loadAiscDb;
