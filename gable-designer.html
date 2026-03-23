@@ -255,6 +255,10 @@
             <div>
                 <div class="panel-header">Member Selection</div>
                 <div class="input-group">
+                    <label>Steel $f_y$ ($MPa$)</label>
+                    <input type="number" id="steel_fy" value="345" step="5">
+                </div>
+                <div class="input-group">
                     <label>Column Section</label>
                     <select id="col_section">
                         <option value="W12X26">Loading...</option>
@@ -388,26 +392,21 @@
             const He = parseFloat(document.getElementById('eave_m').value);
             const pitch = parseFloat(document.getElementById('pitch_deg').value) * Math.PI / 180;
             const spacing = parseFloat(document.getElementById('spacing_m').value);
+            const fy = parseFloat(document.getElementById('steel_fy').value);
             
+            const rafterAngle = pitch;
+            const rafterLen = (L / 2) / Math.cos(rafterAngle);
             const peakH = He + (L/2) * Math.tan(pitch);
 
             // 2. Loads
             const dl = parseFloat(document.getElementById('dl_kpa').value);
             const ll = parseFloat(document.getElementById('ll_kpa').value);
-            const wind = parseFloat(document.getElementById('wind_ms').value);
             
-            // Factored vertical load (LRFD 1.2D + 1.6L)
             const w_factored = (1.2 * dl + 1.6 * ll) * spacing; // kN/m
-            
-            // Simplified Reactions for a 3-hinged gable frame (Approximation)
-            // Vertical Reaction P (Total vertical load / 2)
             const P_reaction = (w_factored * L) / 2; // kN
-            
-            // Horizontal Thrust H (kick-out)
-            // For a 3-hinged frame: H = (w * L^2) / (8 * PeakHeight)
             const H_thrust = (w_factored * Math.pow(L, 2)) / (8 * peakH); // kN
 
-            // 3. Member Check (Simplified)
+            // 3. Member Check
             const colLabel = document.getElementById('col_section').value;
             const rafLabel = document.getElementById('raf_section').value;
             
@@ -415,71 +414,60 @@
             const colShape = aiscDb.find(s => s[labelKey] === colLabel);
             const rafShape = aiscDb.find(s => s[labelKey] === rafLabel);
 
-            // Simplified Stress Ratio (Axial + Bending)
-            // Moment in column base assumed pinned for base design, but peak moment at eave
-            const M_eave = H_thrust * He; // kNm
-            let ratio = 0;
-            if (colShape) {
-                ratio = checkMember(colShape, P_reaction, M_eave);
-            } else {
-                console.error("Column shape not found:", colLabel);
-            }
+            // Column: Peak moment at eave
+            const M_col = H_thrust * He; 
+            const colRatio = checkMember(colShape, P_reaction, M_col, fy);
+
+            // Rafter: Max moment approx at mid-rafter or peak depending on fixity
+            // For 3-hinge gable, rafter moment is complex but peak is at eave
+            const M_raf = M_col; 
+            const rafRatio = checkMember(rafShape, P_reaction / Math.sin(rafterAngle), M_raf, fy);
 
             // 4. Render Results
             renderReactions(P_reaction, H_thrust);
-            renderIntegrity(ratio);
+            renderIntegrity(colRatio, rafRatio, colLabel, rafLabel);
             renderSummary(L, He, peakH, colLabel, rafLabel);
             drawFrame(L, He, peakH);
         }
 
-        function checkMember(shape, P, M) {
+        function checkMember(shape, P, M, Fy) {
             if (!shape) return 0;
             
-            // AISC 360-16 Simplified
-            // Handle variations: A or Area, Sx or S_x
             const aKey = Object.keys(shape).find(k => k === 'A' || k === 'Area') || 'A';
             const sxKey = Object.keys(shape).find(k => k === 'Sx' || k === 'S_x') || 'Sx';
+            const zxKey = Object.keys(shape).find(k => k === 'Zx' || k === 'Z_x') || 'Zx';
             
-            const A_val = parseFloat(shape[aKey]);
-            const Sx_val = parseFloat(shape[sxKey]);
+            const Ag = parseFloat(shape[aKey]) * 645.16; // mm2
+            const Sx = parseFloat(shape[sxKey]) * 16387.06; // mm3
+            const Zx = parseFloat(shape[zxKey]) * 16387.06; // mm3 (Plastic Modulus)
 
-            if (isNaN(A_val) || isNaN(Sx_val)) {
-                console.error("Invalid shape properties for", shape.AISC_Manual_Label, "A:", A_val, "Sx:", Sx_val);
-                return 0;
-            }
+            if (isNaN(Ag) || isNaN(Sx)) return 0;
 
-            const Ag = A_val * 645.16; // sq inch to mm2
-            const Sx = Sx_val * 16387.06; // inch3 to mm3
-            const Fy = 345; // MPa (Grade 50)
+            // AISC LRFD Simplified: Mn = min(Fy*Zx, 1.6*Fy*Sx)
+            const Mn = Math.min(Fy * Zx, 1.6 * Fy * Sx) / 1e6; // kNm
+            const Pn = (Fy * Ag) / 1000; // kN
             
-            const axialStress = (P * 1000) / Ag;
-            const bendingStress = (M * 1e6) / Sx;
+            const axialRatio = (P) / (0.9 * Pn);
+            const bendingRatio = (M) / (0.9 * Mn);
             
-            const ratio = (axialStress / (0.9 * Fy)) + (bendingStress / (0.9 * Fy));
-            return ratio;
+            return axialRatio + bendingRatio;
         }
 
-        function renderReactions(P, H) {
-            document.getElementById('reactionResults').innerHTML = `
-                <table class="result-table">
-                    <tr><td>Vertical $P_u$</td><td>${P.toFixed(1)} kN</td></tr>
-                    <tr><td>Horizontal $H_u$</td><td>${H.toFixed(1)} kN</td></tr>
-                    <tr><td>Moment $M_u$</td><td>0.0 kNm (Pinned)</td></tr>
-                </table>
-                <p style="font-size: 0.75rem; color: var(--text-sub); margin-top: 10px;">
-                    Note: These reactions should be used in the <b>Thickened Slab</b> module for foundation design.
-                </p>
-            `;
-        }
-
-        function renderIntegrity(ratio) {
-            const statusClass = ratio < 1.0 ? 'status-success' : 'status-danger';
-            const statusText = ratio < 1.0 ? 'PASSED' : 'FAILED';
+        function renderIntegrity(colRatio, rafRatio, colName, rafName) {
+            const colStatus = colRatio < 1.0 ? 'status-success' : 'status-danger';
+            const rafStatus = rafRatio < 1.0 ? 'status-success' : 'status-danger';
+            
             document.getElementById('memberResults').innerHTML = `
-                <div style="margin-bottom: 1rem;"><span class="status-badge ${statusClass}">${statusText}</span></div>
+                <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">COLUMN: ${colName}</div>
+                <div style="margin-bottom: 10px;"><span class="status-badge ${colStatus}">${colRatio < 1.0 ? 'OK' : 'FAIL'}</span></div>
+                <table class="result-table" style="margin-bottom:15px;">
+                    <tr><td>Interaction Ratio</td><td>${(colRatio * 100).toFixed(1)}%</td></tr>
+                </table>
+
+                <div style="font-size:0.75rem; font-weight:700; color:var(--text-sub); margin-bottom:5px;">RAFTER: ${rafName}</div>
+                <div style="margin-bottom: 10px;"><span class="status-badge ${rafStatus}">${rafRatio < 1.0 ? 'OK' : 'FAIL'}</span></div>
                 <table class="result-table">
-                    <tr><td>Combined Stress Ratio</td><td>${(ratio * 100).toFixed(1)}%</td></tr>
-                    <tr><td>Limit State</td><td>LRFD AISC 360</td></tr>
+                    <tr><td>Interaction Ratio</td><td>${(rafRatio * 100).toFixed(1)}%</td></tr>
                 </table>
             `;
         }
