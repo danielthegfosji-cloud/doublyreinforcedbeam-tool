@@ -243,8 +243,8 @@
                     <input type="number" id="eave_m" value="6" step="0.5">
                 </div>
                 <div class="input-group">
-                    <label>Roof Pitch ($^{\circ}$)</label>
-                    <input type="number" id="pitch_deg" value="15" step="1">
+                    <label>Apex Height $H_a$ ($m$)</label>
+                    <input type="number" id="apex_m" value="8.5" step="0.1">
                 </div>
                 <div class="input-group">
                     <label>Frame Spacing ($m$)</label>
@@ -390,13 +390,19 @@
             // 1. Geometry
             const L = parseFloat(document.getElementById('span_m').value);
             const He = parseFloat(document.getElementById('eave_m').value);
-            const pitch = parseFloat(document.getElementById('pitch_deg').value) * Math.PI / 180;
+            const Ha = parseFloat(document.getElementById('apex_m').value);
             const spacing = parseFloat(document.getElementById('spacing_m').value);
             const fy = parseFloat(document.getElementById('steel_fy').value);
             
+            // Compute Pitch
+            const rise = Ha - He;
+            const run = L / 2;
+            const pitch = Math.atan2(rise, run);
+            const pitchDeg = pitch * 180 / Math.PI;
+
             const rafterAngle = pitch;
             const rafterLen = (L / 2) / Math.cos(rafterAngle);
-            const peakH = He + (L/2) * Math.tan(pitch);
+            const peakH = Ha;
 
             // 2. Loads
             const dl = parseFloat(document.getElementById('dl_kpa').value);
@@ -419,15 +425,14 @@
             const colRatio = checkMember(colShape, P_reaction, M_col, fy);
 
             // Rafter: Max moment approx at mid-rafter or peak depending on fixity
-            // For 3-hinge gable, rafter moment is complex but peak is at eave
             const M_raf = M_col; 
             const rafRatio = checkMember(rafShape, P_reaction / Math.sin(rafterAngle), M_raf, fy);
 
             // 4. Render Results
             renderReactions(P_reaction, H_thrust);
             renderIntegrity(colRatio, rafRatio, colLabel, rafLabel);
-            renderSummary(L, He, peakH, colLabel, rafLabel);
-            drawFrame(L, He, peakH);
+            renderSummary(L, He, Ha, pitchDeg, colLabel, rafLabel);
+            drawFrame(L, He, Ha);
         }
 
         function checkMember(shape, P, M, Fy) {
