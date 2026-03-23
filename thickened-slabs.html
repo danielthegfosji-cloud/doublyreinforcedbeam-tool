@@ -322,6 +322,22 @@
             </div>
 
             <div>
+                <div class="panel-header">Perimeter Wall Loading</div>
+                <div class="input-group" style="grid-template-columns: 1fr 20px;">
+                    <label>Apply Wall Load</label>
+                    <input type="checkbox" id="wall_load_active" checked onchange="calculate()">
+                </div>
+                <div class="input-group">
+                    <label>Wall Height $H_w$ ($m$)</label>
+                    <input type="number" id="wall_h" value="5.5" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label class="hint-label" title="Weight of 4-inch CHB fully grouted + plaster (~2.1 kPa).">Unit Weight ($kPa$)</label>
+                    <input type="number" id="wall_q" value="2.1" step="0.1">
+                </div>
+            </div>
+
+            <div>
                 <div class="panel-header">Subgrade & Materials</div>
                 <div class="input-group">
                     <label class="hint-label" title="Measures subgrade stiffness. Typical: 15k-30k (clay), 40k-80k (dense sand).">Reaction $k$ ($kN/m^3$)</label>
@@ -595,6 +611,12 @@
             const db_edge = parseFloat(document.getElementById('db_edge').value);
             const db_tie = parseFloat(document.getElementById('db_tie').value);
 
+            // Perimeter Wall Loading Logic
+            const wallActive = document.getElementById('wall_load_active').checked;
+            const wallH = parseFloat(document.getElementById('wall_h').value) || 0;
+            const wallQ = parseFloat(document.getElementById('wall_q').value) || 0;
+            const w_wall = wallActive ? (wallH * wallQ) : 0; // kN/m
+
             // Structural Scheme Logic
             const struct_scheme = document.getElementById('struct_scheme').value;
 
@@ -657,7 +679,7 @@
 
             // Edge Beam Calculation (ACI 10.5.1 Compliant)
             const edgeSpan = 5.0; // m (based on column spacing)
-            Mu_edge = (maxVuP * edgeSpan) / (8 * 1000); 
+            Mu_edge = (maxVuP * edgeSpan) / (8 * 1000) + (w_wall * 1.2 * Math.pow(edgeSpan, 2)) / 8; 
             const As_edge_flex = (Mu_edge * 1e6) / (0.9 * fy * 0.9 * d_edge);
             
             // ACI 10.5.1 Beam Min Steel
@@ -758,7 +780,7 @@
             const totalSteelKg = meshKg + edgeKg + tieKg + tieBeamSteelKg;
 
             // Cache for drawing
-            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge_req, db_tie, n_tie_legs, fy, vol_slab, vol_edge, tieBeamConcVol, totalVol: vol_slab + vol_edge + tieBeamConcVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, splice_edge, ldh_edge, ldh_mesh, supportKg, spacingMaxed, As_flex_mesh, As_min_flex_mesh, As_shrink_mesh, governClause, ld: ld_edge, struct_scheme, tieBeamBars, tieBeamSteelKg, totalSteelKg };
+            lastResults = { L, W, hs, he, be, col_c, l, columns, maxMpos, maxMneg, Mcr, maxVuP, maxPhiVcP, worstCond, maxVuOW, maxPhiVcOW, maxQ, q_allow, maxAsTie, worstNetH, topNeeded, spacing, db, db_edge, n_edge_req, db_tie, n_tie_legs, fy, vol_slab, vol_edge, tieBeamConcVol, totalVol: vol_slab + vol_edge + tieBeamConcVol, meshKg, edgeKg, tieKg, Mu_edge, phiMn_edge, splice_edge, ldh_edge, ldh_mesh, supportKg, spacingMaxed, As_flex_mesh, As_min_flex_mesh, As_shrink_mesh, governClause, ld: ld_edge, struct_scheme, tieBeamBars, tieBeamSteelKg, totalSteelKg, w_wall };
 
             // Update DOM
             renderResults();
@@ -923,6 +945,17 @@
             const scale = Math.min((cw-100)/(r.be*1.5), (ch-100)/(r.he*1.2));
             const mid = ch/2 - (r.he*scale)/4, sx = (cw - r.be*1.5*scale)/2;
             const sh = r.hs*scale, eh = r.he*scale, eb = r.be*scale;
+
+            // Draw Wall if active
+            if (r.w_wall > 0) {
+                ctxEle.fillStyle = '#94a3b8'; ctxEle.globalAlpha = 0.6;
+                const wallWidth = 200 * scale; // 200mm wall placeholder
+                const wallHeight = 400 * scale; // Symbolic height
+                ctxEle.fillRect(sx + 50*scale, mid-sh/2 - wallHeight, wallWidth, wallHeight);
+                ctxEle.globalAlpha = 1.0; ctxEle.strokeStyle = '#475569';
+                ctxEle.strokeRect(sx + 50*scale, mid-sh/2 - wallHeight, wallWidth, wallHeight);
+            }
+
             ctxEle.fillStyle = '#f1f5f9'; ctxEle.strokeStyle = '#475569'; ctxEle.lineWidth = 2;
             ctxEle.beginPath(); ctxEle.moveTo(sx, mid-sh/2); ctxEle.lineTo(sx+r.be*1.5*scale, mid-sh/2); ctxEle.lineTo(sx+r.be*1.5*scale, mid+sh/2); ctxEle.lineTo(sx+eb*1.2, mid+sh/2); ctxEle.lineTo(sx+eb, mid+eh-sh/2); ctxEle.lineTo(sx, mid+eh-sh/2); ctxEle.closePath(); ctxEle.fill(); ctxEle.stroke();
             
