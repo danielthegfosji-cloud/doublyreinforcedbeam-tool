@@ -447,14 +447,26 @@
                 }
             }
 
+            const phiPn_max = curve[0].y;
             const dcRatio = (Mc_Nmm / 1e6) / Mcap;
-            const isSafe = dcRatio <= 1.0 && Pu_kN <= curve[0].y;
+            const axialFail = Pu_kN > phiPn_max;
+            const momentFail = dcRatio > 1.0;
+            const isSafe = !axialFail && !momentFail;
+
+            let failReason = "";
+            if (axialFail && momentFail) failReason = "(Axial & Moment Failure)";
+            else if (axialFail) failReason = "(Axial Capacity Exceeded)";
+            else if (momentFail) failReason = "(Moment Capacity Exceeded)";
 
             document.getElementById('capacityCheckResult').innerHTML = `
                 <div class="status-box ${isSafe?'status-success':'status-danger'}" style="padding:15px; border-radius:8px; background:${isSafe?'#d1fae5':'#fee2e2'}; color:${isSafe?'#065f46':'#991b1b'};">
                     <i class="fa-solid ${isSafe?'fa-circle-check':'fa-circle-xmark'}"></i>
-                    <strong>${isSafe?'SAFE':'UNSAFE'}:</strong> Uniaxial D/C Ratio: <strong>${dcRatio.toFixed(3)}</strong><br>
-                    <small>Moment Capacity $\\phi M_n$ = ${Mcap.toFixed(1)} kN-m vs Demand $M_c$ = ${(Mc_Nmm/1e6).toFixed(1)} kN-m</small>
+                    <strong>${isSafe?'SAFE':'UNSAFE'}:</strong> ${failReason} <br>
+                    <table class="result-table" style="margin-top:10px; width:100%; color:inherit;">
+                        <tr><td>Moment Ratio</td><td><strong>${dcRatio.toFixed(3)}</strong></td></tr>
+                        <tr><td>Axial Capacity $\\phi P_n$</td><td>${phiPn_max.toFixed(1)} kN</td></tr>
+                        <tr><td>Moment Capacity $\\phi M_n$</td><td>${Mcap.toFixed(1)} kN-m</td></tr>
+                    </table>
                 </div>
             `;
 
