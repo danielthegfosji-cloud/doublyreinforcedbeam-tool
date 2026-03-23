@@ -241,7 +241,7 @@
             <a href="index.html" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Suite</a>
             <span class="nav-title"><i class="fa-solid fa-draw-polygon"></i> Steel Gable Designer</span>
         </div>
-        <div style="font-size: 0.8rem; opacity: 0.8;">AISC 360-16 LRFD Engine v1.1</div>
+        <div style="font-size: 0.8rem; opacity: 0.8;">AISC 360-16 LRFD Engine v1.2</div>
     </nav>
 
     <div id="loader" class="loader-overlay">
@@ -311,9 +311,9 @@
                     <input type="number" id="wind_ms" value="45" step="1">
                 </div>
             </div>
-
             <button class="btn-action" onclick="analyzeFrame()">Analyze Frame</button>
-            <button class="btn-action" style="background: var(--primary); margin-top: 8px;" onclick="optimizeFrame()">Optimize Sections (Lightest)</button>
+            <button class="btn-action" style="background: var(--primary); margin-top: 8px;" onclick="optimizeFrame()">Optimize Hot-Rolled (W-Shapes)</button>
+            <button class="btn-action" style="background: #475569; margin-top: 8px;" onclick="optimizeTapered()">Optimize Tapered (Built-Up)</button>
         </aside>
 
         <!-- Main Content -->
@@ -342,6 +342,8 @@
 
     <script>
         let aiscDb = [];
+        let isTaperedMode = false;
+        let taperedDepth = 0; // mm
         const canvas = document.getElementById('frameCanvas');
         const ctx = canvas.getContext('2d');
 
@@ -391,6 +393,7 @@
         }
 
         function analyzeFrame() {
+            isTaperedMode = false;
             if (aiscDb.length === 0) return;
 
             // 1. Geometry
@@ -431,6 +434,78 @@
             renderIntegrity(colRatio, rafRatio, colLabel, rafLabel);
             renderSummary(L, He, Ha, pitchDeg, colLabel, rafLabel);
             drawFrame(L, He, Ha);
+        }
+
+        function optimizeTapered() {
+            const L = parseFloat(document.getElementById('span_m').value);
+            const He = parseFloat(document.getElementById('eave_m').value);
+            const Ha = parseFloat(document.getElementById('apex_m').value);
+            const spacing = parseFloat(document.getElementById('spacing_m').value);
+            const fy = parseFloat(document.getElementById('steel_fy').value);
+            const dl = parseFloat(document.getElementById('dl_kpa').value);
+            const ll = parseFloat(document.getElementById('ll_kpa').value);
+            
+            const w_factored = (1.2 * dl + 1.6 * ll) * spacing;
+            const H_thrust = (w_factored * Math.pow(L, 2)) / (8 * Ha);
+            const Mu = H_thrust * He;
+
+            // Solve 0.25*tw*d^2 + (bf*tf)*d - Mu*10^6/(0.9*Fy) = 0
+            const tw = 8; 
+            const bf = 200;
+            const tf = 12;
+            const A = 0.25 * tw;
+            const B = bf * tf;
+            const C = -(Mu * 1e6) / (0.9 * fy);
+            
+            taperedDepth = (-B + Math.sqrt(B*B - 4*A*C)) / (2*A);
+            isTaperedMode = true;
+            
+            // Re-render
+            const pitch = Math.atan2(Ha - He, L / 2);
+            const pitchDeg = pitch * 180 / Math.PI;
+            const P_reaction = (w_factored * L) / 2;
+            
+            renderReactions(P_reaction, H_thrust);
+            document.getElementById('memberResults').innerHTML = `
+                <div style="font-size:0.75rem; font-weight:700; color:#475569; margin-bottom:5px;">TAPERED OPTIMIZED</div>
+                <table class="result-table">
+                    <tr><td>Eave Depth $d$</td><td>${taperedDepth.toFixed(0)} mm</td></tr>
+                    <tr><td>Flange Plate</td><td>200x12 mm</td></tr>
+                    <tr><td>Web Plate</td><td>8 mm</td></tr>
+                    <tr><td>$M_u$ (Eave)</td><td>${Mu.toFixed(1)} kNm</td></tr>
+                </table>
+                <div style="margin-top:15px; font-size:0.7rem; color:var(--text-sub); border-top:1px solid #eee; padding-top:10px;">
+                    <b>Design Basis:</b><br>
+                    Solving for depth $d$ where:<br>
+                    $M_u \leq \phi F_y Z_x$<br>
+                    $Z_x \approx A_f d + \frac{1}{4} t_w d^2$
+                </div>
+            `;
+            if (window.MathJax) MathJax.typesetPromise();
+            renderSummary(L, He, Ha, pitchDeg, "Built-Up", "Built-Up");
+            drawFrame(L, He, Ha);
+        }
+
+        function drawTaperedMember(x1, y1, x2, y2, w1, w2) {
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            const perp = angle + Math.PI / 2;
+            
+            const p1 = { x: x1 + (w1/2) * Math.cos(perp), y: y1 + (w1/2) * Math.sin(perp) };
+            const p2 = { x: x1 - (w1/2) * Math.cos(perp), y: y1 - (w1/2) * Math.sin(perp) };
+            const p3 = { x: x2 - (w2/2) * Math.cos(perp), y: y2 - (w2/2) * Math.sin(perp) };
+            const p4 = { x: x2 + (w2/2) * Math.cos(perp), y: y2 + (w2/2) * Math.sin(perp) };
+
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.lineTo(p3.x, p3.y);
+            ctx.lineTo(p4.x, p4.y);
+            ctx.closePath();
+            ctx.fillStyle = '#475569';
+            ctx.fill();
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            ctx.stroke();
         }
 
         function optimizeFrame() {
@@ -488,7 +563,7 @@
         }
 
         function checkMember(shape, P, M, Fy) {
-            if (!shape) return 999;
+            if (!shape) return { ratio: 999 };
             const aKey = Object.keys(shape).find(k => k === 'A' || k === 'Area') || 'A';
             const sxKey = Object.keys(shape).find(k => k === 'Sx' || k === 'S_x') || 'Sx';
             const zxKey = Object.keys(shape).find(k => k === 'Zx' || k === 'Z_x') || 'Zx';
@@ -497,21 +572,56 @@
             const Sx = parseFloat(shape[sxKey]) * 16387.06;
             const Zx = parseFloat(shape[zxKey]) * 16387.06;
 
-            if (isNaN(Ag) || isNaN(Sx)) return 999;
+            if (isNaN(Ag) || isNaN(Sx)) return { ratio: 999 };
 
             const Mn = Math.min(Fy * Zx, 1.6 * Fy * Sx) / 1e6;
             const Pn = (Fy * Ag) / 1000;
-            return (P / (0.9 * Pn)) + (M / (0.9 * Mn));
+            
+            const axialRatio = (P) / (0.9 * Pn);
+            const bendingRatio = (M) / (0.9 * Mn);
+            
+            return {
+                ratio: axialRatio + bendingRatio,
+                Pn: 0.9 * Pn,
+                Mn: 0.9 * Mn,
+                Ag: Ag,
+                Zx: Zx,
+                axialRatio: axialRatio,
+                bendingRatio: bendingRatio
+            };
         }
 
         function renderReactions(P, H) {
             document.getElementById('reactionResults').innerHTML = `<table class="result-table"><tr><td>Vertical $P_u$</td><td>${P.toFixed(1)} kN</td></tr><tr><td>Horizontal $H_u$</td><td>${H.toFixed(1)} kN</td></tr><tr><td>Moment $M_u$</td><td>0.0 kNm (Pinned)</td></tr></table>`;
         }
 
-        function renderIntegrity(colRatio, rafRatio, colName, rafName) {
-            const colStatus = colRatio < 1.0 ? 'status-success' : 'status-danger';
-            const rafStatus = rafRatio < 1.0 ? 'status-success' : 'status-danger';
-            document.getElementById('memberResults').innerHTML = `<div style="font-size:0.7rem; font-weight:700;">COL: ${colName}</div><div style="margin-bottom:5px;"><span class="status-badge ${colStatus}">${(colRatio*100).toFixed(1)}%</span></div><div style="font-size:0.7rem; font-weight:700; margin-top:10px;">RAF: ${rafName}</div><div><span class="status-badge ${rafStatus}">${(rafRatio*100).toFixed(1)}%</span></div>`;
+        function renderIntegrity(colResults, rafResults, colName, rafName) {
+            const colStatus = colResults.ratio < 1.0 ? 'status-success' : 'status-danger';
+            const rafStatus = rafResults.ratio < 1.0 ? 'status-success' : 'status-danger';
+            
+            document.getElementById('memberResults').innerHTML = `
+                <div style="font-size:0.75rem; font-weight:700; color:var(--accent); margin-bottom:5px;">COLUMN: ${colName}</div>
+                <table class="result-table" style="margin-bottom:15px;">
+                    <tr><td>$\phi P_n$ (Axial)</td><td>${colResults.Pn.toFixed(1)} kN</td></tr>
+                    <tr><td>$\phi M_n$ (Flexure)</td><td>${colResults.Mn.toFixed(1)} kNm</td></tr>
+                    <tr><td>Interaction</td><td><strong>${(colResults.ratio * 100).toFixed(1)}%</strong></td></tr>
+                </table>
+
+                <div style="font-size:0.75rem; font-weight:700; color:var(--accent); margin-bottom:5px;">RAFTER: ${rafName}</div>
+                <table class="result-table">
+                    <tr><td>$\phi P_n$ (Axial)</td><td>${rafResults.Pn.toFixed(1)} kN</td></tr>
+                    <tr><td>$\phi M_n$ (Flexure)</td><td>${rafResults.Mn.toFixed(1)} kNm</td></tr>
+                    <tr><td>Interaction</td><td><strong>${(rafResults.ratio * 100).toFixed(1)}%</strong></td></tr>
+                </table>
+                
+                <div style="margin-top:15px; font-size:0.7rem; color:var(--text-sub); border-top:1px solid #eee; padding-top:10px;">
+                    <b>LRFD Basis:</b><br>
+                    $\phi M_n = 0.9 \cdot F_y \cdot Z_x$<br>
+                    $\phi P_n = 0.9 \cdot F_y \cdot A_g$<br>
+                    Ratio $= \frac{P_u}{\phi P_n} + \frac{M_u}{\phi M_n}$
+                </div>
+            `;
+            if (window.MathJax) MathJax.typesetPromise();
         }
 
         function renderSummary(L, He, Ha, pitch, col, raf) {
@@ -527,17 +637,32 @@
             const dy = canvas.height - margin;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = '#0f172a';
-            ctx.lineWidth = 4;
-            ctx.lineJoin = 'round';
+            
+            if (isTaperedMode) {
+                const wBase = 0.2 * scale; // 200mm
+                const wEave = (taperedDepth / 1000) * scale;
+                const wApex = 0.2 * scale;
 
-            ctx.beginPath();
-            ctx.moveTo(dx, dy);
-            ctx.lineTo(dx, dy - He * scale);
-            ctx.lineTo(dx + (L / 2) * scale, dy - Ha * scale);
-            ctx.lineTo(dx + L * scale, dy - He * scale);
-            ctx.lineTo(dx + L * scale, dy);
-            ctx.stroke();
+                // Left Column
+                drawTaperedMember(dx, dy, dx, dy - He * scale, wBase, wEave);
+                // Right Column
+                drawTaperedMember(dx + L * scale, dy, dx + L * scale, dy - He * scale, wBase, wEave);
+                // Left Rafter
+                drawTaperedMember(dx, dy - He * scale, dx + (L/2) * scale, dy - Ha * scale, wEave, wApex);
+                // Right Rafter
+                drawTaperedMember(dx + L * scale, dy - He * scale, dx + (L/2) * scale, dy - Ha * scale, wEave, wApex);
+            } else {
+                ctx.strokeStyle = '#0f172a';
+                ctx.lineWidth = 4;
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                ctx.moveTo(dx, dy);
+                ctx.lineTo(dx, dy - He * scale);
+                ctx.lineTo(dx + (L / 2) * scale, dy - Ha * scale);
+                ctx.lineTo(dx + L * scale, dy - He * scale);
+                ctx.lineTo(dx + L * scale, dy);
+                ctx.stroke();
+            }
 
             drawPin(dx, dy);
             drawPin(dx + L * scale, dy);
