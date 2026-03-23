@@ -297,6 +297,24 @@
             </div>
 
             <div>
+                <div class="panel-header">Purlin Design</div>
+                <div class="input-group">
+                    <label>Purlin Size</label>
+                    <select id="purlin_size">
+                        <option value="C15015">C150 x 1.5mm</option>
+                        <option value="C15020">C150 x 2.0mm</option>
+                        <option value="C20020" selected>C200 x 2.0mm</option>
+                        <option value="C20025">C200 x 2.5mm</option>
+                        <option value="C25025">C250 x 2.5mm</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Roofing $kPa$</label>
+                    <input type="number" id="roof_kpa" value="0.15" step="0.05">
+                </div>
+            </div>
+
+            <div>
                 <div class="panel-header">Loading (Service)</div>
                 <div class="input-group">
                     <label>Dead Load ($kN/m^2$)</label>
@@ -331,6 +349,10 @@
                 <div class="card">
                     <div class="card-title">Member Integrity</div>
                     <div id="memberResults"></div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Purlin Design</div>
+                    <div id="purlinResults"></div>
                 </div>
                 <div class="card">
                     <div class="card-title">Material Summary</div>
@@ -440,11 +462,52 @@
             const totalColKg = 2 * colWeight_kgm * He;
             const totalRafKg = 2 * rafWeight_kgm * rafterLen;
 
+            // 4. Purlin Design
+            const purlinKey = document.getElementById('purlin_size').value;
+            const roof_kpa = parseFloat(document.getElementById('roof_kpa').value);
+            
+            // Standard C-Purlin Database (Metric)
+            const purlinDb = {
+                'C15015': { Sx: 28.5e3, weight: 3.5 }, // Sx in mm3, weight kg/m
+                'C15020': { Sx: 37.8e3, weight: 4.6 },
+                'C20020': { Sx: 51.2e3, weight: 5.8 },
+                'C20025': { Sx: 63.5e3, weight: 7.2 },
+                'C25025': { Sx: 82.4e3, weight: 8.5 }
+            };
+            
+            const purlin = purlinDb[purlinKey];
+            const Mn_purlin = (fy * purlin.Sx) / 1e6; // kNm
+            const phiMn_purlin = 0.9 * Mn_purlin;
+            
+            // Load on purlin (Service DL+LL)
+            const p_service = dl + ll + roof_kpa; // kPa
+            const p_factored = (1.2 * (dl + roof_kpa) + 1.6 * ll); // kPa
+            
+            // Max Spacing s: M_factored = (p_factored * s * span^2) / 8 <= phiMn
+            // s = (8 * phiMn) / (p_factored * span^2)
+            const purlinSpan = spacing; // Spacing of frames
+            const s_max_m = (8 * phiMn_purlin) / (p_factored * Math.pow(purlinSpan, 2));
+            const s_final = Math.min(1.5, Math.floor(s_max_m * 10) / 10); // Clamp to max 1.5m for practical reasons
+
             renderReactions(P_reaction, H_thrust);
             renderIntegrity(colResults, rafResults, colLabel, rafLabel);
             renderMaterial(totalColKg, totalRafKg);
+            renderPurlin(purlinKey, s_final, phiMn_purlin);
             renderSummary(L, He, Ha, pitchDeg, colLabel, rafLabel);
             drawFrame(L, He, Ha);
+        }
+
+        function renderPurlin(size, spacing, cap) {
+            document.getElementById('purlinResults').innerHTML = `
+                <table class="result-table">
+                    <tr><td>Selected Size</td><td>${size}</td></tr>
+                    <tr><td>Capacity $\\phi M_n$</td><td>${cap.toFixed(2)} kNm</td></tr>
+                    <tr><td style="color:var(--accent);">Max Spacing</td><td style="color:var(--accent);"><strong>${spacing.toFixed(2)} m</strong></td></tr>
+                </table>
+                <p style="font-size: 0.7rem; color: var(--text-sub); margin-top: 10px;">
+                    Calculated for Frame Spacing as Purlin Span.
+                </p>
+            `;
         }
 
         function optimizeTapered() {
