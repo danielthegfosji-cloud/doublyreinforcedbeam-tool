@@ -417,56 +417,91 @@
             const ctx = document.getElementById('interactionChart').getContext('2d');
             const phi = 0.65; 
             const beta1 = fc <= 28 ? 0.85 : Math.max(0.65, 0.85 - 0.05 * (fc - 28) / 7);
+            const Ag = b * h;
+            const Ast = nbars * (Math.PI * barDia**2 / 4);
 
-            // Generate X-axis capacity curve
+            // Generate capacity curve
             const curve = [];
-            for(let c=10; c < h*2.5; c += h/20) {
+            // Pure Compression Point (P0)
+            const P0 = 0.85 * fc * (Ag - Ast) + fy * Ast;
+            const phiPn_max = 0.80 * phi * P0 / 1000; // kN
+
+            for(let c = 5; c < h * 3; c += h/40) {
                 let a = Math.min(h, beta1 * c);
                 let Pn = 0.85 * fc * a * b;
                 let Mn = Pn * (h/2 - a/2);
-                const d_p = cover + tieDia + barDia/2;
-                const As_side = (nbars / 2) * (Math.PI * barDia**2 / 4);
-
-                [{d_i: d_p, As: As_side}, {d_i: h-d_p, As: As_side}].forEach(l => {
-                    const eps = 0.003 * (c - l.d_i) / c;
+                
+                const dp = cover + tieDia + barDia/2;
+                const layers = [{di: dp, As: Ast/2}, {di: h-dp, As: Ast/2}];
+                
+                let et = 0;
+                layers.forEach(l => {
+                    const eps = 0.003 * (c - l.di) / c;
                     let fs = Math.min(fy, Math.max(-fy, eps * 200000));
                     let force = fs * l.As;
-                    if (eps > 0 && a > l.d_i) force -= 0.85 * fc * l.As;
-                    Pn += force; Mn += force * (h/2 - l.d_i);
+                    if (eps > 0 && a > l.di) force -= 0.85 * fc * l.As;
+                    Pn += force; Mn += force * (h/2 - l.di);
+                    if (l.di > h/2) et = Math.abs(eps);
                 });
-                if (Pn > 0) curve.push({ x: (phi * Mn) / 1e6, y: (phi * Pn) / 1000 });
-            }
 
-            // Find capacity at given Pu for D/C ratio
-            let Mcap = 0;
+                let phi_local = 0.65;
+                if (et >= 0.005) phi_local = 0.90;
+                else if (et > (fy/200000)) phi_local = 0.65 + (0.90-0.65)*(et - fy/200000)/(0.005 - fy/200000);
+
+                if (Pn > 0) curve.push({ x: (phi_local * Mn) / 1e6, y: Math.min(phi_local * Pn / 1000, phiPn_max) });
+            }
+            curve.sort((a,b) => b.y - a.y);
+
             const Pu_kN = Pu_N / 1000;
+            const Mc_kNm = Mc_Nmm / 1e6;
+            
+            // Interpolate Capacity at Pu
+            let Mcap = 0.1; 
             for(let i=0; i<curve.length-1; i++) {
-                if((curve[i].y >= Pu_kN && curve[i+1].y <= Pu_kN) || (curve[i].y <= Pu_kN && curve[i+1].y >= Pu_kN)) {
-                    Mcap = curve[i].x + (curve[i+1].x - curve[i].x) * (Pu_kN - curve[i].y) / (curve[i+1].y - curve[i].y);
+                const p1 = curve[i], p2 = curve[i+1];
+                if((p1.y >= Pu_kN && p2.y <= Pu_kN) || (p1.y <= Pu_kN && p2.y >= Pu_kN)) {
+                    if (Math.abs(p1.y - p2.y) > 0.01) {
+                        Mcap = p1.x + (p2.x - p1.x) * (Pu_kN - p1.y) / (p2.y - p1.y);
+                    } else {
+                        Mcap = Math.max(p1.x, p2.x);
+                    }
                     break;
                 }
             }
 
-            const phiPn_max = curve[0].y;
-            const dcRatio = (Mc_Nmm / 1e6) / Mcap;
-            const axialFail = Pu_kN > phiPn_max;
-            const momentFail = dcRatio > 1.0;
+            // Numerical Tolerance (0.5%)
+            const axialFail = (Pu_kN > phiPn_max + 0.5); 
+            const dcRatio = Mc_kNm / (Mcap + 0.001);
+            const momentFail = (dcRatio > 1.005); 
             const isSafe = !axialFail && !momentFail;
 
             let failReason = "";
-            if (axialFail && momentFail) failReason = "(Axial & Moment Failure)";
-            else if (axialFail) failReason = "(Axial Capacity Exceeded)";
-            else if (momentFail) failReason = "(Moment Capacity Exceeded)";
+            let hints = "";
+            if (isSafe) {
+                failReason = "";
+            } else {
+                if (axialFail && momentFail) {
+                    failReason = "(Axial & Moment Failure)";
+                    hints = "⚠️ <b>Action:</b> Increase column cross-section ($b \\times h$) significantly and increase steel grade ($f_y$).";
+                } else if (axialFail) {
+                    failReason = "(Axial Capacity Exceeded)";
+                    hints = "⚠️ <b>Action:</b> The column is crushing. Increase dimensions ($b, h$) or concrete strength ($f'_c$). Check for typos in units (kN vs N).";
+                } else if (momentFail) {
+                    failReason = "(Moment Capacity Exceeded)";
+                    hints = "⚠️ <b>Action:</b> Increase total bars or bar diameter. If slenderness is high, increase depth ($h$) to reduce magnification.";
+                }
+            }
 
             document.getElementById('capacityCheckResult').innerHTML = `
                 <div class="status-box ${isSafe?'status-success':'status-danger'}" style="padding:15px; border-radius:8px; background:${isSafe?'#d1fae5':'#fee2e2'}; color:${isSafe?'#065f46':'#991b1b'};">
                     <i class="fa-solid ${isSafe?'fa-circle-check':'fa-circle-xmark'}"></i>
                     <strong>${isSafe?'SAFE':'UNSAFE'}:</strong> ${failReason} <br>
-                    <table class="result-table" style="margin-top:10px; width:100%; color:inherit;">
-                        <tr><td>Moment Ratio</td><td><strong>${dcRatio.toFixed(3)}</strong></td></tr>
+                    <table class="result-table" style="margin-top:10px; width:100%; color:inherit; margin-bottom:10px;">
+                        <tr><td>Moment Ratio ($M_c / \\phi M_n$)</td><td><strong>${dcRatio.toFixed(3)}</strong></td></tr>
                         <tr><td>Axial Capacity $\\phi P_n$</td><td>${phiPn_max.toFixed(1)} kN</td></tr>
                         <tr><td>Moment Capacity $\\phi M_n$</td><td>${Mcap.toFixed(1)} kN-m</td></tr>
                     </table>
+                    <div style="font-size:0.75rem; border-top:1px solid rgba(0,0,0,0.1); padding-top:8px;">${hints}</div>
                 </div>
             `;
 
@@ -475,6 +510,7 @@
                 type: 'scatter',
                 data: {
                     datasets: [
+                        { label: 'Max Axial Cutoff (φPn,max)', data: [{x: 0, y: phiPn_max}, {x: curve[0].x * 1.5, y: phiPn_max}], borderColor: '#94a3b8', showLine: true, borderDash: [5, 5], pointRadius: 0, fill: false },
                         { label: 'Design Capacity (φPn vs φMn)', data: curve, borderColor: '#3b82f6', showLine: true, pointRadius: 0, fill: true, backgroundColor: 'rgba(59, 130, 246, 0.05)' },
                         { label: 'Design Point (Mc, Pu)', data: [{ x: (Mc_Nmm/1e6), y: (Pu_N/1000) }], backgroundColor: isSafe?'#10b981':'#ef4444', pointRadius: 8 }
                     ]
