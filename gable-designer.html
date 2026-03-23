@@ -462,14 +462,13 @@
             const totalColKg = 2 * colWeight_kgm * He;
             const totalRafKg = 2 * rafWeight_kgm * rafterLen;
 
-            // 4. Purlin Design
+            // 4. Purlin Design (Service Load Basis)
             const purlinKey = document.getElementById('purlin_size').value;
             const roof_kpa = parseFloat(document.getElementById('roof_kpa').value);
-            const purlinSpan = spacing; // Spacing of frames
+            const purlinSpan = spacing; 
             
-            // Standard C-Purlin Database (Metric)
             const purlinDb = {
-                'C15015': { Sx: 28.5e3, weight: 3.5 }, // Sx in mm3, weight kg/m
+                'C15015': { Sx: 28.5e3, weight: 3.5 },
                 'C15020': { Sx: 37.8e3, weight: 4.6 },
                 'C20020': { Sx: 51.2e3, weight: 5.8 },
                 'C20025': { Sx: 63.5e3, weight: 7.2 },
@@ -477,37 +476,37 @@
             };
             
             const purlin = purlinDb[purlinKey];
-            const Mn_purlin = (fy * purlin.Sx) / 1e6; // kNm
+            const Mn_purlin = (fy * purlin.Sx) / 1e6; 
             const phiMn_purlin = 0.9 * Mn_purlin;
             
-            // Factored Load on roofing area
-            const p_factored = (1.2 * (dl + roof_kpa) + 1.6 * ll); // kPa
+            // Total Service Load (DL + LL + Roofing)
+            const p_service = dl + ll + roof_kpa; // kPa
             
-            // Max Spacing s: M_factored = (p_factored * s * span^2) / 8 <= phiMn
-            const s_max_m = (8 * phiMn_purlin) / (p_factored * Math.pow(purlinSpan, 2));
+            // Max Spacing s based on Service Demand <= phiMn
+            const s_max_m = (8 * phiMn_purlin) / (p_service * Math.pow(purlinSpan, 2));
             const s_final = Math.min(1.5, Math.floor(s_max_m * 10) / 10); 
 
-            // Required Mu at actual spacing
-            const Mu_purlin_req = (p_factored * s_final * Math.pow(purlinSpan, 2)) / 8;
+            // Service Moment at final spacing
+            const Ms_purlin = (p_service * s_final * Math.pow(purlinSpan, 2)) / 8;
 
             renderReactions(P_reaction, H_thrust);
             renderIntegrity(colResults, rafResults, colLabel, rafLabel);
             renderMaterial(totalColKg, totalRafKg);
-            renderPurlin(purlinKey, s_final, phiMn_purlin, Mu_purlin_req);
+            renderPurlin(purlinKey, s_final, phiMn_purlin, Ms_purlin);
             renderSummary(L, He, Ha, pitchDeg, colLabel, rafLabel);
             drawFrame(L, He, Ha);
         }
 
-        function renderPurlin(size, spacing, cap, req) {
+        function renderPurlin(size, spacing, cap, demand) {
             document.getElementById('purlinResults').innerHTML = `
                 <table class="result-table">
                     <tr><td>Selected Size</td><td>${size}</td></tr>
-                    <tr><td>Req. Demand $M_u$</td><td>${req.toFixed(2)} kNm</td></tr>
+                    <tr><td>Service Demand $M_s$</td><td>${demand.toFixed(2)} kNm</td></tr>
                     <tr><td>Design Capacity $\\phi M_n$</td><td>${cap.toFixed(2)} kNm</td></tr>
                     <tr><td style="color:var(--accent);">Design Spacing</td><td style="color:var(--accent);"><strong>${spacing.toFixed(2)} m</strong></td></tr>
                 </table>
                 <p style="font-size: 0.7rem; color: var(--text-sub); margin-top: 10px;">
-                    Spacing optimized to satisfy $M_u \\leq \\phi M_n$.
+                    Calculated using Service Loads ($D+L$).
                 </p>
             `;
         }
