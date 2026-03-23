@@ -460,10 +460,34 @@
             const H_thrust = (w_factored * Math.pow(L, 2)) / (8 * Ha);
             const Mu = H_thrust * He;
 
-            const tw = 8; const bf = 200; const tf = 12; const phi = 0.9;
-            const A = 0.25 * tw; const B = bf * tf; const C = -(Mu * 1e6) / (phi * fy);
-            const discriminant = B * B - 4 * A * C;
-            taperedDepth = (discriminant > 0) ? (-B + Math.sqrt(discriminant)) / (2 * A) : 0;
+            // Aggressive Optimization: Start with light plates
+            let bf = 150; let tf = 8; let tw = 6;
+            const phi = 0.9;
+            
+            // Tiered Optimization Loop
+            let d_eave = 0;
+            const plateOptions = [
+                {bf: 150, tf: 6, tw: 5},
+                {bf: 150, tf: 8, tw: 6},
+                {bf: 200, tf: 8, tw: 6},
+                {bf: 200, tf: 10, tw: 8},
+                {bf: 250, tf: 12, tw: 8}
+            ];
+
+            for (let opt of plateOptions) {
+                bf = opt.bf; tf = opt.tf; tw = opt.tw;
+                const A = 0.25 * tw;
+                const B = bf * tf;
+                const C = -(Mu * 1e6) / (phi * fy);
+                const discriminant = B * B - 4 * A * C;
+                if (discriminant > 0) {
+                    d_eave = (-B + Math.sqrt(discriminant)) / (2 * A);
+                    // If depth is reasonable (between 250 and 800), we found our optimal plate
+                    if (d_eave > 250 && d_eave < 800) break;
+                }
+            }
+
+            taperedDepth = Math.max(250, Math.ceil(d_eave / 10) * 10);
             isTaperedMode = true;
             
             const pitch = Math.atan2(Ha - He, L / 2);
@@ -472,25 +496,27 @@
             
             // Weight Calculation (Tapered)
             const rho_steel = 7850; // kg/m3
-            const baseDepth = 200; const eaveDepth = taperedDepth; const apexDepth = 200;
+            const baseDepth = 150; const apexDepth = 150;
             
-            const avgColArea = (2 * bf * tf + tw * (baseDepth + eaveDepth) / 2) / 1e6; // m2
-            const avgRafArea = (2 * bf * tf + tw * (eaveDepth + apexDepth) / 2) / 1e6; // m2
+            const avgColArea = (2 * bf * tf + tw * (baseDepth + taperedDepth) / 2) / 1e6; 
+            const avgRafArea = (2 * bf * tf + tw * (taperedDepth + apexDepth) / 2) / 1e6; 
             const totalColKg = 2 * (avgColArea * He * rho_steel);
             const totalRafKg = 2 * (avgRafArea * rafterLen * rho_steel);
 
             renderReactions(P_reaction, H_thrust);
             renderMaterial(totalColKg, totalRafKg);
             
+            taperedDetails = { d_eave: taperedDepth, d_base: baseDepth, d_apex: apexDepth, bf, tf, tw };
+
             document.getElementById('memberResults').innerHTML = `
                 <div style="font-size:0.75rem; font-weight:700; color:var(--accent); margin-bottom:5px;">COLUMN (Tapered)</div>
                 <table class="result-table" style="margin-bottom:15px;">
-                    <tr><td>Base/Eave Depth</td><td>${baseDepth} / ${eaveDepth.toFixed(0)} mm</td></tr>
+                    <tr><td>Base/Eave Depth</td><td>${baseDepth} / ${taperedDepth.toFixed(0)} mm</td></tr>
                     <tr><td>Flanges / Web</td><td>${bf}x${tf} / ${tw} mm</td></tr>
                 </table>
                 <div style="font-size:0.75rem; font-weight:700; color:var(--accent); margin-bottom:5px;">RAFTER (Tapered)</div>
                 <table class="result-table">
-                    <tr><td>Eave/Apex Depth</td><td>${eaveDepth.toFixed(0)} / ${apexDepth} mm</td></tr>
+                    <tr><td>Eave/Apex Depth</td><td>${taperedDepth.toFixed(0)} / ${apexDepth} mm</td></tr>
                     <tr><td>Flanges / Web</td><td>${bf}x${tf} / ${tw} mm</td></tr>
                 </table>
             `;
