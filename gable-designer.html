@@ -453,6 +453,19 @@
             return axialRatio + bendingRatio;
         }
 
+        function renderReactions(P, H) {
+            document.getElementById('reactionResults').innerHTML = `
+                <table class="result-table">
+                    <tr><td>Vertical $P_u$</td><td>${P.toFixed(1)} kN</td></tr>
+                    <tr><td>Horizontal $H_u$</td><td>${H.toFixed(1)} kN</td></tr>
+                    <tr><td>Moment $M_u$</td><td>0.0 kNm (Pinned)</td></tr>
+                </table>
+                <p style="font-size: 0.75rem; color: var(--text-sub); margin-top: 10px;">
+                    Note: These reactions should be used in the <b>Thickened Slab</b> module for foundation design.
+                </p>
+            `;
+        }
+
         function renderIntegrity(colRatio, rafRatio, colName, rafName) {
             const colStatus = colRatio < 1.0 ? 'status-success' : 'status-danger';
             const rafStatus = rafRatio < 1.0 ? 'status-success' : 'status-danger';
