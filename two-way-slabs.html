@@ -80,6 +80,10 @@
             overflow-x: auto;
             padding: 0.5rem 0;
         }
+
+        /* Test Modal Styles */
+        #testModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1100; align-items:center; justify-content:center; }
+        #testModal .modal-content { max-width: 450px; width: 90%; height: auto; padding: 1.5rem; }
     </style>
 </head>
 <body>
@@ -95,6 +99,18 @@
             <div style="padding: 10px; background: #1e293b; color: white; font-size: 0.8rem; text-align: center;">
                 <i class="fa-solid fa-mouse"></i> Left Click: Rotate | Scroll: Zoom | Right Click: Pan
             </div>
+        </div>
+    </div>
+
+    <!-- Test Result Modal -->
+    <div id="testModal">
+        <div class="modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem;">
+                <h3 id="testTitle" style="margin:0;">Unit Test Result</h3>
+                <button onclick="closeTestModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--text-muted);">&times;</button>
+            </div>
+            <div id="testBody" style="padding: 1rem 0; line-height: 1.6;"></div>
+            <button onclick="closeTestModal()" class="btn-calc" style="margin-top: 1rem; background-color: var(--primary);">Close</button>
         </div>
     </div>
     
@@ -205,7 +221,10 @@
                 </div>
             </div>
 
-            <button class="btn-calc" onclick="calculateDesign()">Calculate & Render</button>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button class="btn-calc" onclick="calculateDesign()">Calculate & Render</button>
+                <button class="btn-calc" onclick="runUnitTestEx16_3()" style="background-color: var(--text-muted);"><i class="fa-solid fa-vial"></i> Run Textbook Test (Ex 16.3)</button>
+            </div>
         </div>
     </nav>
 
@@ -837,6 +856,66 @@
             if (document.getElementById('modal3d').style.display === 'none') return;
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
+        }
+
+        // --- TEST MODAL LOGIC ---
+        function openTestModal(title, body) {
+            document.getElementById('testTitle').innerText = title;
+            document.getElementById('testBody').innerHTML = body;
+            document.getElementById('testModal').style.display = 'flex';
+        }
+
+        function closeTestModal() {
+            document.getElementById('testModal').style.display = 'none';
+        }
+
+        function runUnitTestEx16_3() {
+            // McCormac Example 16.3 (Converted to SI)
+            // L1 = 20ft = 6096mm, L2 = 16ft = 4877mm
+            // fc = 3000psi = 20.7MPa, fy = 60ksi = 413.7MPa
+            // h = 7.5in = 190.5mm
+            // Total Dead = 110psf = 5.267 kPa
+            // Self-weight (190.5mm * 24kN/m3) = 4.572 kPa
+            // SDL = 5.267 - 4.572 = 0.695 kPa
+            // LL = 80psf = 3.83 kPa
+            
+            document.getElementById('l1').value = 6096;
+            document.getElementById('l2').value = 4877;
+            document.getElementById('colSize').value = 406;
+            document.getElementById('thickness').value = 190.5;
+            document.getElementById('fc').value = 20.7;
+            document.getElementById('fy').value = 413.7;
+            document.getElementById('wd').value = 0.695;
+            document.getElementById('wl').value = 3.83;
+            document.getElementById('barSize').value = 12;
+            document.getElementById('beamBw').value = 0;
+            document.getElementById('beamH').value = 0;
+
+            calculateDesign();
+
+            // Expected Static Moments (Mo)
+            // Mo1 (Long) = 181.2 ft-k = 245.7 kNm
+            // Mo2 (Short) = 146.2 ft-k = 198.2 kNm
+            
+            // Wait for MathJax/DOM
+            setTimeout(() => {
+                const resultsText = document.getElementById('output').innerText;
+                
+                // My tool doesn't explicitly display Mo in the final schedule, 
+                // but we can check the Int. Negative Column Strip Moment
+                // Mu_long_neg_col = 88.4 ft-k = 119.8 kNm
+                
+                const mu_match = resultsText.match(/Direction\s*L_1\s*\(Analysis Span\)\s*Int\.\s*Negative\s*Column\s*Strip\s*([\d\.]+)\s*kNm/i);
+                const mu_val = mu_match ? parseFloat(mu_match[1]) : 0;
+                const expected_mu = 119.8;
+                const error = Math.abs(mu_val - expected_mu) / expected_mu;
+
+                if (mu_val > 0 && error < 0.05) {
+                    openTestModal("✅ Test Passed", `<strong>Example 16.3 (Interior Flat Plate)</strong><br><br>Parameters set to SI equivalents.<br>Expected $M_{u,neg}$ (Col Strip): ~119.8 kNm<br>Calculated $M_{u,neg}$: ${mu_val.toFixed(1)} kNm<br><br>Results match textbook values within 5% tolerance.`);
+                } else {
+                    openTestModal("❌ Test Result", `<strong>Example 16.3 (Interior Flat Plate)</strong><br><br>Calculated $M_{u,neg}$: ${mu_val.toFixed(1)} kNm (Exp: 119.8)<br><br>Note: Minor deviations may occur due to DDM clear span definitions and SI rounding.`);
+                }
+            }, 200);
         }
 
         // Initial Draw on Load
