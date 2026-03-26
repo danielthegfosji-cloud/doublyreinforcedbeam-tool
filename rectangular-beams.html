@@ -748,7 +748,15 @@
                 }
                 z_v.push(row);
             }
-            Plotly.newPlot('plotContainer', [{z: z_v, x: as_v, y: asp_v, type: 'surface'}], {scene: {xaxis:{title:'As'}, yaxis:{title:"As'"}, zaxis:{title:'phiMn'}}});
+            Plotly.newPlot('plotContainer', [{z: z_v, x: as_v, y: asp_v, type: 'surface'}], {
+                scene: {
+                    xaxis: {title: 'As (mm²)'}, 
+                    yaxis: {title: "As' (mm²)"}, 
+                    zaxis: {title: 'phiMn (kN-m)'},
+                    aspectratio: {x: 1, y: 1, z: 1}
+                },
+                margin: { l: 0, r: 0, b: 0, t: 30 }
+            });
         }
 
         function downloadSurfaceMarkdown() { }
