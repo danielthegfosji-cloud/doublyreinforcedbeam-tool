@@ -102,6 +102,20 @@
         </div>
     </div>
 
+    <!-- Detailed Computations Modal -->
+    <div id="detailedModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1100; align-items:center; justify-content:center;">
+        <div class="modal-content" style="max-width: 800px; width: 95%; height: 85vh; padding: 1.5rem; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem;">
+                <h3 style="margin:0;">Detailed Design Computations</h3>
+                <button onclick="closeDetailedModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--text-muted);">&times;</button>
+            </div>
+            <div id="detailedBody" style="font-size: 0.95rem; line-height: 1.8;">
+                <p style="color: #64748b; font-style: italic;">No calculation data available.</p>
+            </div>
+            <button onclick="closeDetailedModal()" class="btn-calc" style="margin-top: 1rem; background-color: var(--primary);">Close</button>
+        </div>
+    </div>
+
     <!-- Test Result Modal -->
     <div id="testModal">
         <div class="modal-content">
@@ -223,7 +237,10 @@
 
             <div style="display: flex; flex-direction: column; gap: 10px;">
                 <button class="btn-calc" onclick="calculateDesign()">Calculate & Render</button>
-                <button class="btn-calc" onclick="runUnitTestEx16_3()" style="background-color: var(--text-muted);"><i class="fa-solid fa-vial"></i> Run Textbook Test (Ex 16.3)</button>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-calc" onclick="runUnitTestEx16_3()" style="flex: 1; background-color: var(--text-muted); margin-top: 0;"><i class="fa-solid fa-vial"></i> Test (Ex 16.3)</button>
+                    <button class="btn-calc" onclick="openDetailedModal()" style="flex: 1; background-color: #64748b; margin-top: 0;"><i class="fa-solid fa-list-check"></i> Details</button>
+                </div>
             </div>
         </div>
     </nav>
@@ -283,6 +300,8 @@
             const beamBw = parseFloat(document.getElementById('beamBw').value) || 0;
             const beamH = parseFloat(document.getElementById('beamH').value) || 0;
 
+            let detailedSteps = "<h4>Step 1: Load Calculations</h4>";
+
             // Validation to prevent numerical instability
             if (isNaN(fc) || fc < 12 || isNaN(fy) || fy < 200) {
                 document.getElementById('output').innerHTML = "<p style='color: var(--error); font-weight: 600; padding: 1rem;'>Please enter valid material properties ($f'_c \\ge 12$ MPa and $f_y \\ge 200$ MPa).</p>";
@@ -297,10 +316,29 @@
             const d = h - cover - db; 
             const Ec = 4700 * Math.sqrt(fc);
 
+            detailedSteps += `
+                <div class="latex-row">
+                    $$ w_{self} = \\frac{h}{1000} \\times 24 = \\frac{${h}}{1000} \\times 24 = ${w_self.toFixed(2)} \\text{ kN/m}^2 $$
+                    $$ w_{dead} = w_{sdl} + w_{self} = ${w_sdl} + ${w_self.toFixed(2)} = ${w_d_total.toFixed(2)} \\text{ kN/m}^2 $$
+                    $$ w_u = 1.2 w_d + 1.6 w_l = 1.2(${w_d_total.toFixed(2)}) + 1.6(${w_l}) = \\mathbf{${w_u.toFixed(2)} \\text{ kN/m}^2} $$
+                </div>
+            `;
+
             // 3. DDM Limitations Check (ACI 13.6.1)
             const l_ratio_check = Math.max(l1, l2) / Math.min(l1, l2);
             const load_ratio_check = w_l / w_d_total;
-            const isDDMValid = l_ratio_check <= 2.0 && load_ratio_check <= 2.0;            // 3. Structural Properties (Directional)
+            const isDDMValid = l_ratio_check <= 2.0 && load_ratio_check <= 2.0;
+
+            detailedSteps += "<h4>Step 2: DDM Limitations Check</h4>";
+            detailedSteps += `
+                <ul class="result-list">
+                    <li>Span Ratio ($L_{max}/L_{min}$): $ ${Math.max(l1,l2)} / ${Math.min(l1,l2)} = ${l_ratio_check.toFixed(2)} $ (Limit $\\le 2.0$)</li>
+                    <li>Load Ratio ($L/D$): $ ${w_l} / ${w_d_total.toFixed(2)} = ${load_ratio_check.toFixed(2)} $ (Limit $\\le 2.0$)</li>
+                    <li>Method Used: <strong>${isDDMValid ? 'Direct Design Method (DDM)' : 'Equivalent Frame Method (EFM)'}</strong></li>
+                </ul>
+            `;
+
+            // 3. Structural Properties (Directional)
             function getAlpha(span_len, beam_w, beam_h, s_thick) {
                 if (beam_w <= 0 || beam_h <= 0) return 0;
                 // Effective Beam Width (ACI 13.2.4) - Simplified
@@ -324,8 +362,7 @@
                 beta_t = E_STEEL * C / (2 * Ec * Is_edge); 
             }
 
-
-            let stiffness_details = { l1: null, l2: null };
+            detailedSteps += "<h4>Step 3: Static Moment ($M_o$) for Analysis Span ($L_1$)</h4>";
 
             // 4. Analysis Helper (DDM or EFM)
             function analyzeDirection(l_span, l_trans, alpha_f_dir, dirKey) {
@@ -376,6 +413,20 @@
             const res1 = analyzeDirection(l1, l2, alpha_f1, 'l1');
             const res2 = analyzeDirection(l2, l1, alpha_f2, 'l2');
 
+            detailedSteps += `
+                <div class="latex-row">
+                    $$ L_n = L_1 - \\text{Col} = ${l1} - ${col} = ${res1.ln} \\text{ mm} = ${ (res1.ln/1000).toFixed(2) } \\text{ m} $$
+                    $$ M_o = \\frac{w_u L_2 L_n^2}{8} = \\frac{${w_u.toFixed(2)} \\times ${(l2/1000).toFixed(2)} \\times ${(res1.ln/1000).toFixed(2)}^2}{8} = \\mathbf{${res1.Mo.toFixed(1)} \\text{ kNm}} $$
+                </div>
+                <p>Moment Distribution (Interior Panel):</p>
+                <ul class="result-list">
+                    <li>Total Negative Moment ($M_{neg}$): $ 0.65 \\times M_o = 0.65 \\times ${res1.Mo.toFixed(1)} = ${res1.M_int_neg.toFixed(1)} \\text{ kNm} $</li>
+                    <li>Total Positive Moment ($M_{pos}$): $ 0.35 \\times M_o = 0.35 \\times ${res1.Mo.toFixed(1)} = ${res1.M_pos.toFixed(1)} \\text{ kNm} $</li>
+                </ul>
+            `;
+
+            detailedSteps += "<h4>Step 4: Reinforcement Determination (Column Strip $L_1$)</h4>";
+
             // 5. Reinforcement Calculation
             function getSpacing(M, b_strip, d_eff) {
                 if (M <= 0) return 450;
@@ -402,6 +453,19 @@
             const d1_reinf = designStrips(res1, l2, d);
             const d2_reinf = designStrips(res2, l1, d - db);
 
+            const M_cs_neg = res1.M_int_neg * res1.pct_int_neg;
+            const As_cs_neg = (M_cs_neg * 1e6) / (phi * fy * 0.9 * d);
+            const As_cs_min = 0.0018 * (l2/2) * h;
+
+            detailedSteps += `
+                <div class="latex-row">
+                    $$ \\text{CS Negative Moment} = M_{neg} \\times \\text{pct}_{cs} = ${res1.M_int_neg.toFixed(1)} \\times ${res1.pct_int_neg.toFixed(2)} = ${M_cs_neg.toFixed(1)} \\text{ kNm} $$
+                    $$ A_{s,req} = \\frac{M \\times 10^6}{\\phi f_y (0.9d)} = \\frac{${M_cs_neg.toFixed(1)} \\times 10^6}{0.9 \\times ${fy} \\times (0.9 \\times ${d.toFixed(1)})} = ${As_cs_neg.toFixed(0)} \\text{ mm}^2 $$
+                    $$ A_{s,min} = 0.0018 \\times b \\times h = 0.0018 \\times ${(l2/2).toFixed(0)} \\times ${h} = ${As_cs_min.toFixed(0)} \\text{ mm}^2 $$
+                    $$ s_{calc} = \\frac{b \\times a_{bar}}{A_{s,design}} = \\frac{${(l2/2).toFixed(0)} \\times ${(Math.PI * db**2 / 4).toFixed(1)}}{${Math.max(As_cs_neg, As_cs_min).toFixed(0)}} = ${d1_reinf.cs_int_neg} \\text{ mm c/c} $$
+                </div>
+            `;
+
             // 6. Punching Shear Safety Check
             let bo_sides = 4;
             if (spanType === 'simple') {
@@ -416,6 +480,15 @@
             const Vc3 = 0.083 * (2 + 40 * d / bo) * Math.sqrt(fc); // Alpha_s = 40 for interior
             const phiVc_punch = 0.75 * Math.min(Vc1, Vc2, Vc3) * bo * d / 1000;
 
+            detailedSteps += "<h4>Step 5: Punching Shear Check</h4>";
+            detailedSteps += `
+                <div class="latex-row">
+                    $$ b_o = 4 \\times (\\text{col} + d) = 4 \\times (${col} + ${d.toFixed(1)}) = ${bo.toFixed(1)} \\text{ mm} $$
+                    $$ V_u = w_u \\times (A_{trib} - A_{crit}) = ${w_u.toFixed(2)} \\times (\\frac{${l1} \\times ${l2}}{10^6} - \\frac{(${col} + ${d.toFixed(1)})^2}{10^6}) = ${Vu_punch.toFixed(1)} \\text{ kN} $$
+                    $$ \\phi V_c = 0.75 \\times 0.33 \\sqrt{f'_c} \\times b_o \\times d = 0.75 \\times 0.33 \\sqrt{${fc}} \\times ${bo.toFixed(1)} \\times ${d.toFixed(1)} / 1000 = ${phiVc_punch.toFixed(1)} \\text{ kN} $$
+                </div>
+                <p>Status: <strong>${Vu_punch < phiVc_punch ? 'PASS' : 'FAIL'}</strong></p>
+            `;
 
             // Deflection Check (Simplified Elastic)
             const Ig = (1000 * Math.pow(h, 3)) / 12;
@@ -916,6 +989,32 @@
                     openTestModal("❌ Test Result", `<strong>Example 16.3 (Interior Flat Plate)</strong><br><br>Calculated $M_{u,neg}$: ${mu_val.toFixed(1)} kNm (Exp: 119.8)<br><br>Note: Minor deviations may occur due to DDM clear span definitions and SI rounding.`);
                 }
             }, 200);
+        }
+
+        // --- DETAILED COMPUTATIONS MODAL LOGIC ---
+        function openDetailedModal() {
+            if (!lastDesignData) {
+                alert("Please calculate a design first.");
+                return;
+            }
+            document.getElementById('detailedModal').style.display = 'flex';
+            renderDetailedComputations();
+        }
+
+        function closeDetailedModal() {
+            document.getElementById('detailedModal').style.display = 'none';
+        }
+
+        function renderDetailedComputations() {
+            const body = document.getElementById('detailedBody');
+            if (!lastDesignData.detailedSteps) {
+                body.innerHTML = "<p>No detailed steps recorded for this calculation.</p>";
+                return;
+            }
+            body.innerHTML = lastDesignData.detailedSteps;
+            if (window.MathJax && MathJax.typesetPromise) {
+                MathJax.typesetPromise();
+            }
         }
 
         // Initial Draw on Load
