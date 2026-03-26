@@ -578,10 +578,19 @@
 
         function hideModal() {
             document.getElementById('welcomeModal').style.display = 'none';
+            // Save current timestamp to localStorage
+            localStorage.setItem('openConcrete_lastShown', Date.now());
         }
 
         window.onload = function() {
-            document.getElementById('welcomeModal').style.display = 'flex';
+            const lastShown = localStorage.getItem('openConcrete_lastShown');
+            const now = Date.now();
+            const oneDay = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+            // Show modal if it has never been shown or if 24 hours have passed
+            if (!lastShown || (now - lastShown) > oneDay) {
+                document.getElementById('welcomeModal').style.display = 'flex';
+            }
         };
     </script>
 </body>
