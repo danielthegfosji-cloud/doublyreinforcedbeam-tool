@@ -449,7 +449,11 @@
             let d_prime = cover + stirrup + (barProps.d / 2);
             let resultHTML = "", barCountTension = 0, barCountComp = 0, tensionLayers = [], compLayers = [], n_layers = 1, n_layers_comp = 1, isDoubly = false, f_s_prime = 0, rho_max = 0, rho = 0, PhiMn_max_singly = 0;
 
-            for (let iter = 0; iter < 5; iter++) {
+            for (let iter = 0; iter < 10; iter++) {
+                if (d <= d_prime) {
+                    alertArea.innerHTML = `<div class="alert-box alert-danger"><b>Design Failed:</b> Section too small for moment $M_u$. Reinforcement centroid exceeds beam depth.</div>`;
+                    return;
+                }
                 rho_max = (0.85 * beta1 * fc / fy) * (eps_u / (eps_u + 0.005));
                 const As_max_singly = rho_max * b * d;
                 const a_max = (As_max_singly * fy) / (0.85 * fc * b);
@@ -470,17 +474,38 @@
                     const M_u1 = PhiMn_max_singly, As1 = As_max_singly, M_u2 = Mu - M_u1;
                     const c_max = (eps_u / (eps_u + 0.005)) * d;
                     f_s_prime = Math.min(Es * eps_u * (c_max - d_prime) / c_max, fy);
+                    
+                    if (f_s_prime <= 0.85 * fc) {
+                        alertArea.innerHTML = `<div class="alert-box alert-danger"><b>Design Failed:</b> Section too small. Compression steel is not effective ($f'_s \\le 0.85f'_c$).</div>`;
+                        return;
+                    }
+
                     const As_prime = M_u2 / (phi * (f_s_prime - 0.85*fc) * (d - d_prime));
+                    if (As_prime < 0) {
+                        alertArea.innerHTML = `<div class="alert-box alert-danger"><b>Design Failed:</b> Geometry or moment limits exceeded.</div>`;
+                        return;
+                    }
                     As_total_req = As1 + As_prime * (f_s_prime - 0.85*fc) / fy;
                     barCountComp = Math.max(2, Math.ceil(As_prime / barProps.area));
                 }
 
                 barCountTension = Math.ceil(As_total_req / barProps.area);
+                if (isNaN(barCountTension) || barCountTension < 1 || barCountTension > 100) {
+                    alertArea.innerHTML = `<div class="alert-box alert-danger"><b>Design Failed:</b> Excessive reinforcement required. Increase section size.</div>`;
+                    return;
+                }
+
                 n_layers = Math.ceil(barCountTension / n_max_per_layer);
                 let sum_yi_ni = 0, temp_tensionLayers = [], rem = barCountTension;
                 for (let i = 0; i < n_layers; i++) {
                     const count = Math.min(rem, n_max_per_layer);
                     const yi = h - cover - stirrup - barProps.d/2 - i * (barProps.d + minSpacing);
+                    
+                    if (yi < cover + stirrup + barProps.d) {
+                        alertArea.innerHTML = `<div class="alert-box alert-danger"><b>Design Failed:</b> Reinforcement does not fit in section height.</div>`;
+                        return;
+                    }
+
                     sum_yi_ni += count * yi; temp_tensionLayers.push({y: yi, count: count}); rem -= count;
                 }
                 const new_d = sum_yi_ni / barCountTension;
@@ -688,17 +713,38 @@
             for (let j = 0; j < asp_v.length; j++) {
                 const row = [], As_p = asp_v[j];
                 for (let i = 0; i < as_v.length; i++) {
-                    const As = as_v[i]; let c = d/3;
-                    for(let k=0; k<30; k++) {
-                        let eps_s_p = eps_u * (c - d_p) / c, fs_p = (eps_s_p < 0) ? 0 : Math.min(Es * eps_s_p, fy);
-                        let Tension = As * Math.min(Es * eps_u * (d-c)/c, fy);
-                        let Diff = (0.85*fc*beta1*c*b) + As_p*(fs_p-0.85*fc) - Tension;
-                        if(Math.abs(Diff) < 10) break; c -= Diff/5000;
+                    const As = as_v[i]; 
+                    let c = d/3;
+                    // Improved iteration for surface plot
+                    for(let k=0; k<50; k++) {
+                        let eps_s_p = eps_u * (c - d_p) / c;
+                        let fs_p = (c <= d_p) ? 0 : Math.min(Es * eps_s_p, fy);
+                        let eps_t_iter = eps_u * (d - c) / c;
+                        let fs_t = Math.min(Es * eps_t_iter, fy);
+                        
+                        let Cc = 0.85 * fc * beta1 * c * b;
+                        let Cs = As_p * (fs_p - 0.85 * fc);
+                        if (c <= d_p) Cs = 0; // Neglect comp steel if NA is above it
+                        
+                        let Diff = Cc + Cs - (As * fs_t);
+                        if(Math.abs(Diff) < 1.0) break;
+                        c = Math.max(1.0, c - Diff / (0.85 * fc * beta1 * b + 1000)); 
                     }
-                    let eps_t = eps_u*(d-c)/c, phi = 0.9;
-                    if(eps_t<0.002) phi=0.65; else if(eps_t<0.005) phi=0.65+(eps_t-0.002)*(250/3);
-                    let Mn = (0.85*fc*beta1*c*b)*(d-beta1*c/2) + As_p*(Math.min(Es*eps_u*(c-d_p)/c, fy)-0.85*fc)*(d-d_p);
-                    row.push(eps_t < 0.004 ? null : phi*Mn/1e6);
+                    
+                    let eps_t = eps_u * (d - c) / c;
+                    let phi = 0.9;
+                    if (eps_t < 0.002) phi = 0.65;
+                    else if (eps_t < 0.005) phi = 0.65 + (eps_t - 0.002) * (250 / 3);
+                    
+                    let fs_p_final = (c <= d_p) ? 0 : Math.min(Es * eps_u * (c - d_p) / c, fy);
+                    let Mn = (0.85 * fc * beta1 * c * b) * (d - beta1 * c / 2);
+                    if (c > d_p) {
+                        Mn += As_p * (fs_p_final - 0.85 * fc) * (d - d_p);
+                    }
+                    
+                    // Capacity is physically 0 or positive; nullify invalid high-strain regions
+                    let finalVal = (eps_t < 0.004) ? null : (phi * Mn / 1e6);
+                    row.push(finalVal < 0 ? 0 : finalVal);
                 }
                 z_v.push(row);
             }
