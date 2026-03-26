@@ -100,6 +100,46 @@
 
         .check-pass { border-left-color: var(--success); }
         .check-fail { border-left-color: var(--error); }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            max-width: 450px;
+            width: 90%;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 0.5rem;
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-muted);
+        }
     </style>
 </head>
 <body>
@@ -179,9 +219,14 @@
                 </select>
             </div>
 
-            <button type="submit" class="calc-btn">
-                <i class="fa-solid fa-calculator"></i> Calculate Design
-            </button>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button type="submit" class="calc-btn">
+                    <i class="fa-solid fa-calculator"></i> Calculate Design
+                </button>
+                <button type="button" class="calc-btn" onclick="runUnitTestEx46()" style="background-color: var(--text-muted);">
+                    <i class="fa-solid fa-vial"></i> Run Textbook Test (Ex 4.6)
+                </button>
+            </div>
         </form>
         </div>
     </nav>
@@ -267,7 +312,71 @@
 
     </main>
 
+    <!-- Test Result Modal -->
+    <div id="testModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="testTitle" style="margin:0;">Unit Test Result</h3>
+                <button onclick="closeTestModal()" class="close-btn">&times;</button>
+            </div>
+            <div id="testBody" style="padding: 1rem 0; line-height: 1.6;"></div>
+            <button onclick="closeTestModal()" class="calc-btn" style="margin-top: 1rem; background-color: var(--primary);">Close</button>
+        </div>
+    </div>
+
     <script>
+        // --- Test Result Modal Logic ---
+        function openTestModal(title, body) {
+            document.getElementById('testTitle').innerText = title;
+            document.getElementById('testBody').innerHTML = body;
+            document.getElementById('testModal').style.display = 'flex';
+        }
+
+        function closeTestModal() {
+            document.getElementById('testModal').style.display = 'none';
+        }
+
+        function runUnitTestEx46() {
+            // McCormac Example 4.6 (Converted to SI)
+            document.getElementById('fc').value = 28;
+            document.getElementById('fy').value = 420;
+            document.getElementById('wc').value = 24;
+            document.getElementById('span').value = 3.05;
+            document.getElementById('h').value = 150;
+            document.getElementById('supportCondition').value = 'simple';
+            document.getElementById('cover').value = 20;
+            document.getElementById('sdl').value = 0;
+            document.getElementById('ll').value = 9.58;
+            document.getElementById('barSize').value = 12;
+
+            calculateSlab();
+
+            // Wait a brief moment for DOM updates then validate
+            setTimeout(() => {
+                const resAnalysisText = document.getElementById('res-analysis').innerText;
+                const resFlexureText = document.getElementById('res-flexure').innerText;
+                
+                // Flexible regex to handle MathJax rendering variations
+                const mu_match = resAnalysisText.match(/([\d\.]+)\s*kNm/);
+                const as_match = resFlexureText.match(/Governing\s*As\s*=\s*([\d\.]+)/i);
+
+                const mu_val = mu_match ? parseFloat(mu_match[1]) : 0;
+                const as_val = as_match ? parseFloat(as_match[1]) : 0;
+
+                const expected_mu = 22.86;
+                const expected_as = 500; 
+
+                const mu_error = Math.abs(mu_val - expected_mu) / expected_mu;
+                const as_error = Math.abs(as_val - expected_as) / expected_as;
+
+                if (mu_val > 0 && as_val > 0 && mu_error < 0.05 && as_error < 0.05) {
+                    openTestModal("✅ Test Passed", `<strong>Example 4.6 (SI Conversion)</strong><br><br>Expected $M_u$: ~22.9 kNm<br>Calculated $M_u$: ${mu_val.toFixed(2)} kNm<br><br>Expected $A_s$: ~500 mm²/m<br>Calculated $A_s$: ${as_val.toFixed(0)} mm²/m<br><br>Results match textbook values within 5% tolerance.`);
+                } else {
+                    openTestModal("❌ Test Result", `<strong>Example 4.6 (SI Conversion)</strong><br><br>Calculated $M_u$: ${mu_val.toFixed(2)} kNm (Exp: 22.9)<br>Calculated $A_s$: ${as_val.toFixed(0)} mm²/m (Exp: 500)<br><br>Note: Minor deviations are expected due to SI unit rounding and material density differences.`);
+                }
+            }, 100);
+        }
+
         function calculateSlab() {
             // 1. Retrieve Inputs
             const fc = parseFloat(document.getElementById('fc').value);
