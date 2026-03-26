@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SimpleCrete | Concrete Calculator Hub</title>
+    <title>open-concrete | Structural Design Suite</title>
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -23,6 +23,7 @@
         /* --- SIDEBAR NAVIGATION --- */
         .sidebar {
             width: 380px;
+            overflow-y: auto;
         }
 
         .brand {
@@ -34,6 +35,8 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            font-family: 'Courier New', Courier, monospace;
+            letter-spacing: -1px;
         }
 
         .brand i {
@@ -41,7 +44,9 @@
         }
 
         .nav-group {
-            padding: 1.5rem 1rem 0 1rem;
+            padding: 1rem 1rem 0 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 0.5rem;
         }
 
         .nav-header {
@@ -50,8 +55,39 @@
             letter-spacing: 1px;
             color: #94a3b8;
             margin-bottom: 0.75rem;
-            padding-left: 0.5rem;
+            padding: 0.5rem;
             font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: color 0.2s;
+        }
+
+        .nav-header:hover {
+            color: white;
+        }
+
+        .nav-header i {
+            transition: transform 0.3s ease;
+            font-size: 0.7rem;
+        }
+
+        .nav-group.collapsed .nav-header i {
+            transform: rotate(-90deg);
+        }
+
+        .nav-content {
+            max-height: 1000px;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out, opacity 0.2s;
+            opacity: 1;
+        }
+
+        .nav-group.collapsed .nav-content {
+            max-height: 0;
+            opacity: 0;
+            pointer-events: none;
         }
 
         .nav-item {
@@ -69,7 +105,7 @@
         .nav-item:hover {
             background-color: #334155;
             color: white;
-            padding-left: 1.25rem; /* Slight slide effect */
+            padding-left: 1.25rem;
         }
 
         .nav-item i {
@@ -81,7 +117,7 @@
 
         /* --- MAIN CONTENT AREA --- */
         .main-content {
-            margin-left: 380px; /* Width of sidebar */
+            margin-left: 380px;
             flex: 1;
             padding: 2rem;
             display: flex;
@@ -100,8 +136,10 @@
         }
 
         .hero h1 {
-            font-size: 2.5rem;
+            font-size: 3.5rem;
             margin-bottom: 0.5rem;
+            font-family: 'Courier New', Courier, monospace;
+            letter-spacing: -2px;
         }
 
         .hero p {
@@ -184,7 +222,6 @@
             margin-left: 10px;
         }
 
-        /* Footer */
         footer {
             margin-top: auto;
             border-top: 1px solid var(--border-color);
@@ -193,303 +230,362 @@
             color: var(--text-muted);
             font-size: 0.875rem;
         }
+
+        /* --- MODAL STYLES --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-card {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 16px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+            border: 1px solid #e2e8f0;
+            position: relative;
+            animation: modalSlideUp 0.4s ease-out;
+        }
+
+        @keyframes modalSlideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-icon {
+            font-size: 3rem;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-card h2 {
+            font-family: 'Courier New', Courier, monospace;
+            margin-bottom: 1rem;
+            color: var(--text-main);
+        }
+
+        .modal-card p {
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+        }
+
+        .disclaimer-box {
+            background: #fef2f2;
+            border: 1px solid #fee2e2;
+            padding: 1rem;
+            border-radius: 8px;
+            color: #991b1b;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .signature {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: 700;
+            margin-top: 1rem;
+            display: block;
+            color: var(--text-main);
+        }
+
+        .modal-btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .modal-btn:hover {
+            background-color: #2563eb;
+        }
     </style>
 </head>
 <body>
+
+    <!-- WELCOME MODAL -->
+    <div id="welcomeModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-icon">
+                <i class="fa-solid fa-hand-peace"></i>
+            </div>
+            <h2>Welcome to open-concrete!</h2>
+            <p>
+                Hey there! Just a friendly heads-up: this is strictly an <strong>educational tool</strong> 🏗️. 
+                It's designed to help students and curious minds explore the math behind reinforced concrete design.
+            </p>
+            <div class="disclaimer-box">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <strong>Full Disclosure:</strong> This is very much a <em>work in progress</em>. Bugs, glitches, and weird edge cases are definitely lurking in the shadows! 🐛 
+                Seriously, you'd be much better off cracking open a real textbook 📚 than relying on this for actual professional design. 
+                If you use this without knowing exactly what you're doing... well, may <strong>God bless your soul!</strong> 🙏✨
+            </div>
+            <p>
+                Always consult a licensed Professional Engineer (PE) for actual construction. 📐
+                <span class="signature">- Daniel</span>
+            </p>
+            <button class="modal-btn" onclick="hideModal()">Let's Design!</button>
+        </div>
+    </div>
 
     <!-- SIDEBAR NAVIGATION -->
     <nav class="sidebar">
         <div class="brand">
             <i class="fa-solid fa-cube"></i>
-            SimpleCrete
+            open-concrete
         </div>
 
-        <!-- Group 1: Basics -->
-        <div class="nav-group">
-            <div class="nav-header">Analysis & Basics</div>
-            <a href="material-properties.html" class="nav-item">
-                <i class="fa-solid fa-flask"></i> Material Properties
-            </a>
-            <a href="loads.html" class="nav-item">
-                <i class="fa-solid fa-weight-hanging"></i> Load Calculations
-            </a>
-            <a href="flexural-analysis.html" class="nav-item">
-                <i class="fa-solid fa-chart-line"></i> Flexural Analysis
-            </a>
+        <div class="nav-group collapsed">
+            <div class="nav-header" onclick="toggleGroup(this)">
+                Analysis & Basics
+                <i class="fa-solid fa-chevron-down"></i>
+            </div>
+            <div class="nav-content">
+                <a href="material-properties.html" class="nav-item">
+                    <i class="fa-solid fa-flask"></i> Material Properties
+                </a>
+                <a href="loads.html" class="nav-item">
+                    <i class="fa-solid fa-weight-hanging"></i> Load Calculations
+                </a>
+                <a href="flexural-analysis.html" class="nav-item">
+                    <i class="fa-solid fa-chart-line"></i> Flexural Analysis
+                </a>
+            </div>
         </div>
 
-        <!-- Group 2: Beam Design -->
-        <div class="nav-group">
-            <div class="nav-header">Beam Design</div>
-            <a href="rectangular-beams.html" class="nav-item">
-                <i class="fa-solid fa-draw-polygon"></i> Rectangular Beams
-            </a>
-            <a href="t-beams.html" class="nav-item">
-                <i class="fa-solid fa-t"></i> T-Beams
-            </a>
-            <a href="shear-design.html" class="nav-item">
-                <i class="fa-solid fa-scissors"></i> Shear & Stirrups
-            </a>
-            <a href="torsion.html" class="nav-item">
-                <i class="fa-solid fa-arrows-spin"></i> Torsion
-            </a>
-            <a href="development-length.html" class="nav-item">
-                <i class="fa-solid fa-ruler-horizontal"></i> Bond & Dev. Length
-            </a>
-            <a href="serviceability.html" class="nav-item">
-                <i class="fa-solid fa-eye"></i> Serviceability (Cracks)
-            </a>
+        <div class="nav-group collapsed">
+            <div class="nav-header" onclick="toggleGroup(this)">
+                Beam Design
+                <i class="fa-solid fa-chevron-down"></i>
+            </div>
+            <div class="nav-content">
+                <a href="rectangular-beams.html" class="nav-item">
+                    <i class="fa-solid fa-draw-polygon"></i> Rectangular Beams
+                </a>
+                <a href="t-beams.html" class="nav-item">
+                    <i class="fa-solid fa-t"></i> T-Beams
+                </a>
+                <a href="shear-design.html" class="nav-item">
+                    <i class="fa-solid fa-scissors"></i> Shear & Stirrups
+                </a>
+                <a href="torsion.html" class="nav-item">
+                    <i class="fa-solid fa-arrows-spin"></i> Torsion
+                </a>
+                <a href="development-length.html" class="nav-item">
+                    <i class="fa-solid fa-ruler-horizontal"></i> Bond & Dev. Length
+                </a>
+                <a href="serviceability.html" class="nav-item">
+                    <i class="fa-solid fa-eye"></i> Serviceability (Cracks)
+                </a>
+            </div>
         </div>
 
-        <!-- Group 3: Columns -->
-        <div class="nav-group">
-            <div class="nav-header">Columns</div>
-            <a href="short-columns.html" class="nav-item">
-                <i class="fa-solid fa-compress"></i> Short Columns (Axial)
-            </a>
-            <a href="interaction-diagram.html" class="nav-item">
-                <i class="fa-solid fa-chart-area"></i> Biaxial Bending Short Columns
-            </a>
-            <a href="slender-columns.html" class="nav-item">
-                <i class="fa-solid fa-text-height"></i> Slender Columns
-            </a>
-            <a href="spiral-columns.html" class="nav-item">
-                <i class="fa-solid fa-sync"></i> Spiral Columns (Circular)
-            </a>
-            <a href="column-splices.html" class="nav-item">
-                <i class="fa-solid fa-link"></i> Column Splices & Bond
-            </a>
+        <div class="nav-group collapsed">
+            <div class="nav-header" onclick="toggleGroup(this)">
+                Columns
+                <i class="fa-solid fa-chevron-down"></i>
+            </div>
+            <div class="nav-content">
+                <a href="short-columns.html" class="nav-item">
+                    <i class="fa-solid fa-compress"></i> Short Columns (Axial)
+                </a>
+                <a href="interaction-diagram.html" class="nav-item">
+                    <i class="fa-solid fa-chart-area"></i> Biaxial Bending Short Columns
+                </a>
+                <a href="slender-columns.html" class="nav-item">
+                    <i class="fa-solid fa-text-height"></i> Slender Columns
+                </a>
+                <a href="spiral-columns.html" class="nav-item">
+                    <i class="fa-solid fa-sync"></i> Spiral Columns (Circular)
+                </a>
+                <a href="column-splices.html" class="nav-item">
+                    <i class="fa-solid fa-link"></i> Column Splices & Bond
+                </a>
+            </div>
         </div>
 
-        <!-- Group 4: Slabs & Systems -->
-        <div class="nav-group">
-            <div class="nav-header">Slabs & Systems</div>
-            <a href="one-way-slabs.html" class="nav-item">
-                <i class="fa-solid fa-arrow-up"></i> One-Way Slabs
-            </a>
-            <a href="two-way-slabs.html" class="nav-item">
-                <i class="fa-solid fa-arrows-up-down-left-right"></i> Two-Way Slabs
-            </a>
-            <a href="continuous-beams.html" class="nav-item">
-                <i class="fa-solid fa-wave-square"></i> Continuous Frames
-            </a>
+        <div class="nav-group collapsed">
+            <div class="nav-header" onclick="toggleGroup(this)">
+                Slabs & Systems
+                <i class="fa-solid fa-chevron-down"></i>
+            </div>
+            <div class="nav-content">
+                <a href="one-way-slabs.html" class="nav-item">
+                    <i class="fa-solid fa-arrow-up"></i> One-Way Slabs
+                </a>
+                <a href="two-way-slabs.html" class="nav-item">
+                    <i class="fa-solid fa-arrows-up-down-left-right"></i> Two-Way Slabs
+                </a>
+                <a href="continuous-beams.html" class="nav-item">
+                    <i class="fa-solid fa-wave-square"></i> Continuous Frames
+                </a>
+            </div>
         </div>
 
-        <!-- Group 5: Foundations & Walls -->
-        <div class="nav-group">
-            <div class="nav-header">Foundations & Walls</div>
-            <a href="wall-footings.html" class="nav-item">
-                <i class="fa-solid fa-grip-lines"></i> Wall Footings
-            </a>
-            <a href="isolated-footings.html" class="nav-item">
-                <i class="fa-solid fa-square"></i> Isolated Footings
-            </a>
-            <a href="eccentric-footings.html" class="nav-item">
-                <i class="fa-solid fa-wand-magic-sparkles"></i> Eccentric Footing Solver
-            </a>
-            <a href="combined-footings.html" class="nav-item">
-                <i class="fa-solid fa-object-group"></i> Combined Footings
-            </a>
-            <a href="mat-foundations.html" class="nav-item">
-                <i class="fa-solid fa-layer-group"></i> Mat Foundations
-            </a>
-            <a href="thickened-slabs.html" class="nav-item">
-                <i class="fa-solid fa-table-cells-large"></i> Thickened Slabs (SOG)
-            </a>
-            <a href="pile-caps.html" class="nav-item">
-                <i class="fa-solid fa-cubes"></i> Pile Caps
-            </a>
-            <a href="retaining-walls.html" class="nav-item">
-                <i class="fa-solid fa-mountain"></i> Retaining Walls
-            </a>
-            <a href="shear-walls.html" class="nav-item">
-                <i class="fa-solid fa-border-all"></i> Shear Walls
-            </a>
+        <div class="nav-group collapsed">
+            <div class="nav-header" onclick="toggleGroup(this)">
+                Foundations & Walls
+                <i class="fa-solid fa-chevron-down"></i>
+            </div>
+            <div class="nav-content">
+                <a href="wall-footings.html" class="nav-item">
+                    <i class="fa-solid fa-grip-lines"></i> Wall Footings
+                </a>
+                <a href="isolated-footings.html" class="nav-item">
+                    <i class="fa-solid fa-square"></i> Isolated Footings
+                </a>
+                <a href="eccentric-footings.html" class="nav-item">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Eccentric Footing Solver
+                </a>
+                <a href="combined-footings.html" class="nav-item">
+                    <i class="fa-solid fa-object-group"></i> Combined Footings
+                </a>
+                <a href="mat-foundations.html" class="nav-item">
+                    <i class="fa-solid fa-layer-group"></i> Mat Foundations
+                </a>
+                <a href="thickened-slabs.html" class="nav-item">
+                    <i class="fa-solid fa-table-cells-large"></i> Thickened Slabs (SOG)
+                </a>
+                <a href="pile-caps.html" class="nav-item">
+                    <i class="fa-solid fa-cubes"></i> Pile Caps
+                </a>
+                <a href="retaining-walls.html" class="nav-item">
+                    <i class="fa-solid fa-mountain"></i> Retaining Walls
+                </a>
+                <a href="shear-walls.html" class="nav-item">
+                    <i class="fa-solid fa-border-all"></i> Shear Walls
+                </a>
+            </div>
         </div>
 
-        <!-- Group 6: Special Topics -->
-        <div class="nav-group">
-            <div class="nav-header">Special Topics</div>
-            <a href="gable-designer.html" class="nav-item">
-                <i class="fa-solid fa-draw-polygon"></i> Gable Designer
-            </a>
-            <a href="prestressed-concrete.html" class="nav-item">
-                <i class="fa-solid fa-grip-lines"></i> Prestressed Concrete
-            </a>
-            <a href="reinforced-masonry.html" class="nav-item">
-                <i class="fa-solid fa-brick"></i> Reinforced Masonry
-            </a>
-            <a href="coming-soon.html" class="nav-item">
-                <i class="fa-solid fa-house-crack"></i> Seismic Design
-            </a>
-            <a href="https://github.com/danielthegfosji-cloud/reinforcedConcrete" target="_blank" class="nav-item">
-                <i class="fa-brands fa-github"></i> GitHub Repository
-            </a>
+        <div class="nav-group collapsed">
+            <div class="nav-header" onclick="toggleGroup(this)">
+                Special Topics
+                <i class="fa-solid fa-chevron-down"></i>
+            </div>
+            <div class="nav-content">
+                <a href="gable-designer.html" class="nav-item">
+                    <i class="fa-solid fa-draw-polygon"></i> Gable Designer
+                </a>
+                <a href="prestressed-concrete.html" class="nav-item">
+                    <i class="fa-solid fa-grip-lines"></i> Prestressed Concrete
+                </a>
+                <a href="reinforced-masonry.html" class="nav-item">
+                    <i class="fa-solid fa-brick"></i> Reinforced Masonry
+                </a>
+                <a href="coming-soon.html" class="nav-item">
+                    <i class="fa-solid fa-house-crack"></i> Seismic Design
+                </a>
+                <a href="https://github.com/danielthegfosji-cloud/reinforcedConcrete" target="_blank" class="nav-item">
+                    <i class="fa-brands fa-github"></i> GitHub Repository
+                </a>
+            </div>
         </div>
         
-        <div style="height: 50px;"></div> <!-- Spacer -->
+        <div style="height: 50px;"></div>
     </nav>
 
     <!-- MAIN PAGE CONTENT -->
     <main class="main-content">
-        <!-- Hero Section -->
         <div class="hero">
-            <h1>Reinforced Concrete Design</h1>
+            <h1>open-concrete</h1>
             <p>A comprehensive suite of calculation tools based on ACI 318-11 Code. Select a module from the sidebar or use the quick access tools below.</p>
         </div>
 
-        <!-- Quick Access Section -->
         <div class="section-title">Commonly Used Calculators</div>
         
         <div class="grid-container">
-            <!-- Card 1: Rectangular Beams -->
             <a href="rectangular-beams.html" class="card">
                 <div>
-                    <div class="card-icon">
-                        <i class="fa-solid fa-vector-square"></i>
-                    </div>
+                    <div class="card-icon"><i class="fa-solid fa-vector-square"></i></div>
                     <div class="card-title">Rectangular Beam Design</div>
-                    <div class="card-desc">
-                        Calculate flexural strength ($M_n$), required steel area ($A_s$), and check strain limits for singly and doubly reinforced beams.
-                    </div>
+                    <div class="card-desc">Calculate flexural strength ($M_n$), required steel area ($A_s$), and check strain limits.</div>
                 </div>
-                <div class="card-footer">
-                    Launch Calculator <i class="fa-solid fa-arrow-right"></i>
-                </div>
+                <div class="card-footer">Launch Calculator <i class="fa-solid fa-arrow-right"></i></div>
             </a>
 
-            <!-- Card 2: One-Way Slabs -->
             <a href="one-way-slabs.html" class="card">
                 <div>
-                    <div class="card-icon">
-                        <i class="fa-solid fa-layer-group"></i>
-                    </div>
+                    <div class="card-icon"><i class="fa-solid fa-layer-group"></i></div>
                     <div class="card-title">One-Way Slab Design</div>
-                    <div class="card-desc">
-                        Design continuous one-way slabs. Includes temperature steel checks and ACI coefficient method for moments.
-                    </div>
+                    <div class="card-desc">Design continuous one-way slabs. Includes temperature steel checks.</div>
                 </div>
-                <div class="card-footer">
-                    Launch Calculator <i class="fa-solid fa-arrow-right"></i>
-                </div>
+                <div class="card-footer">Launch Calculator <i class="fa-solid fa-arrow-right"></i></div>
             </a>
 
-            <!-- Card 3: Short Columns -->
             <a href="short-columns.html" class="card">
                 <div>
-                    <div class="card-icon">
-                        <i class="fa-solid fa-columns"></i>
-                    </div>
-                    <div class="card-title">Short Column Analysis & Check</div>
-                    <div class="card-desc">
-                        Analyze axially loaded columns and columns with eccentric loading. Includes slenderness check for short column behavior and interaction points ($P_n, M_n$).
-                    </div>
+                    <div class="card-icon"><i class="fa-solid fa-columns"></i></div>
+                    <div class="card-title">Short Column Analysis</div>
+                    <div class="card-desc">Analyze axially loaded columns and columns with eccentric loading.</div>
                 </div>
-                <div class="card-footer">
-                    Launch Calculator <i class="fa-solid fa-arrow-right"></i>
-                </div>
+                <div class="card-footer">Launch Calculator <i class="fa-solid fa-arrow-right"></i></div>
             </a>
 
-            <!-- Card 4: Shear Design -->
             <a href="shear-design.html" class="card">
                 <div>
-                    <div class="card-icon">
-                        <i class="fa-solid fa-scissors"></i>
-                    </div>
+                    <div class="card-icon"><i class="fa-solid fa-scissors"></i></div>
                     <div class="card-title">Shear & Stirrups</div>
-                    <div class="card-desc">
-                        Determine shear capacity ($\phi V_c$) and design stirrup spacing ($s$) for beams based on $V_u$ diagrams.
-                    </div>
+                    <div class="card-desc">Determine shear capacity ($\phi V_c$) and design stirrup spacing.</div>
                 </div>
-                <div class="card-footer">
-                    Launch Calculator <i class="fa-solid fa-arrow-right"></i>
-                </div>
+                <div class="card-footer">Launch Calculator <i class="fa-solid fa-arrow-right"></i></div>
             </a>
 
-            <!-- Card 5: Footings -->
             <a href="isolated-footings.html" class="card">
                 <div>
-                    <div class="card-icon">
-                        <i class="fa-solid fa-square"></i>
-                    </div>
+                    <div class="card-icon"><i class="fa-solid fa-square"></i></div>
                     <div class="card-title">Isolated Footing Design</div>
-                    <div class="card-desc">
-                        Design square or rectangular isolated footings. Checks one-way shear, punching shear, and bearing pressure.
-                    </div>
+                    <div class="card-desc">Design square or rectangular isolated footings. Checks shear and bearing.</div>
                 </div>
-                <div class="card-footer">
-                    Launch Calculator <i class="fa-solid fa-arrow-right"></i>
-                </div>
+                <div class="card-footer">Launch Calculator <i class="fa-solid fa-arrow-right"></i></div>
             </a>
 
-            <!-- Card 6: Development Length -->
-            <a href="development-length.html" class="card">
-                <div>
-                    <div class="card-icon">
-                        <i class="fa-solid fa-anchor"></i>
-                    </div>
-                    <div class="card-title">Development Length</div>
-                    <div class="card-desc">
-                        Calculate required development lengths ($l_d$) for tension/compression bars and standard hooks.
-                    </div>
-                </div>
-                <div class="card-footer">
-                    Launch Calculator <i class="fa-solid fa-arrow-right"></i>
-                </div>
-            </a>
-
-            <!-- Card: Eccentric Footing Solver -->
             <a href="eccentric-footings.html" class="card">
                 <div>
-                    <div class="card-icon">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i>
-                    </div>
+                    <div class="card-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
                     <div class="card-title">Eccentric Footing Solver</div>
-                    <div class="card-desc">
-                        Automatically solve for footing dimensions ($L, B$) to satisfy bearing pressure and prevent uplift for columns with large moments.
-                    </div>
+                    <div class="card-desc">Automatically solve for footing dimensions to prevent uplift.</div>
                 </div>
-                <div class="card-footer">
-                    Launch Solver <i class="fa-solid fa-arrow-right"></i>
-                </div>
-            </a>
-
-            <!-- Card 7: Column Splices -->
-            <a href="column-splices.html" class="card">
-                <div>
-                    <div class="card-icon">
-                        <i class="fa-solid fa-link"></i>
-                    </div>
-                    <div class="card-title">Column Splices & Bond</div>
-                    <div class="card-desc">
-                        Analyze compression development lengths ($\ell_{dc}$) and lap splice requirements for column longitudinal bars and footing dowels.
-                    </div>
-                </div>
-                <div class="card-footer">
-                    Launch Calculator <i class="fa-solid fa-arrow-right"></i>
-                </div>
-            </a>
-            <!-- Card 8: Thickened SOG -->
-            <a href="thickened-slabs.html" class="card">
-                <div>
-                    <div class="card-icon">
-                        <i class="fa-solid fa-table-cells-large"></i>
-                    </div>
-                    <div class="card-title">Thickened Slab (SOG)</div>
-                    <div class="card-desc">
-                        Analyze slab-on-grade with point loads. Includes automatic check for top rebar requirement based on Westergaard negative moments.
-                    </div>
-                </div>
-                <div class="card-footer">
-                    Launch Calculator <i class="fa-solid fa-arrow-right"></i>
-                </div>
+                <div class="card-footer">Launch Solver <i class="fa-solid fa-arrow-right"></i></div>
             </a>
         </div>
 
         <footer>
-            <p>&copy; 2023 SimpleCrete. Based on McCormac & Brown, 9th Edition. | <a href="https://github.com/danielthegfosji-cloud/reinforcedConcrete" target="_blank" style="color: inherit; text-decoration: none;"><i class="fa-brands fa-github"></i> Open Source on GitHub</a></p>
+            <p>&copy; 2026 open-concrete. Based on McCormac & Brown, 9th Edition. | <a href="https://github.com/danielthegfosji-cloud/reinforcedConcrete" target="_blank" style="color: inherit; text-decoration: none;"><i class="fa-brands fa-github"></i> Open Source on GitHub</a></p>
         </footer>
     </main>
 
+    <script>
+        function toggleGroup(header) {
+            const group = header.parentElement;
+            group.classList.toggle('collapsed');
+        }
+
+        function hideModal() {
+            document.getElementById('welcomeModal').style.display = 'none';
+            localStorage.setItem('modalShown', 'true');
+        }
+
+        window.onload = function() {
+            if (!localStorage.getItem('modalShown')) {
+                document.getElementById('welcomeModal').style.display = 'flex';
+            }
+        };
+    </script>
 </body>
 </html>

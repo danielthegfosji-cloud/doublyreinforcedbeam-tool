@@ -262,9 +262,10 @@
         <aside class="input-panel">
             <div>
                 <div class="panel-header">Design Presets</div>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn-add" style="background: var(--primary); font-size: 0.7rem;" onclick="applyPreset('default')">Commercial (5-Bay)</button>
-                    <button class="btn-add" style="background: #475569; font-size: 0.7rem;" onclick="applyPreset('7bay')">Light (7-Bay)</button>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <button class="btn-add" style="background: var(--primary); font-size: 0.7rem; flex: 1;" onclick="applyPreset('default')">Commercial (5-Bay)</button>
+                    <button class="btn-add" style="background: #475569; font-size: 0.7rem; flex: 1;" onclick="applyPreset('7bay')">Light (7-Bay)</button>
+                    <button class="btn-add" style="background: #0ea5e9; font-size: 0.7rem; flex: 1;" onclick="applyPreset('gable5')">Gable (5-Col/20m)</button>
                 </div>
             </div>
 
@@ -479,6 +480,19 @@
                     const x = i * spacing;
                     const isCorner = (i === 0 || i === (numFrames - 1));
                     const p = isCorner ? 42 : 82;
+                    columns.push({x: x, y: 0, p: p, h: 30});
+                    columns.push({x: x, y: 20, p: p, h: 30});
+                }
+            } else if (type === 'gable5') {
+                document.getElementById('L_m').value = 20;
+                document.getElementById('W_m').value = 20;
+                columns = [];
+                const numCols = 5;
+                const spacing = 20 / (numCols - 1); // 5m
+                for (let i = 0; i < numCols; i++) {
+                    const x = i * spacing;
+                    const isCorner = (i === 0 || i === (numCols - 1));
+                    const p = isCorner ? 51 : 102;
                     columns.push({x: x, y: 0, p: p, h: 30});
                     columns.push({x: x, y: 20, p: p, h: 30});
                 }

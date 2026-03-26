@@ -125,7 +125,7 @@
             </div>
             <div class="form-row">
                 <div class="form-col">
-                    <label>Pile Cap. $Q_{all}$ (kN)</label>
+                    <label>Allow. Pile Cap. $Q_{all}$ (kN)</label>
                     <input type="number" id="qall" value="600" oninput="calculate()">
                 </div>
                 <div class="form-col">
@@ -156,12 +156,27 @@
                     <input type="number" id="spacing" value="1200" oninput="calculate()">
                 </div>
             </div>
+            <div class="form-group" style="margin-bottom: 0.5rem;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 400;">
+                    <input type="checkbox" id="manualDim" onchange="toggleManualDim()"> Manual Cap Dimensions
+                </label>
+            </div>
+            <div class="form-row" id="manualDimRow" style="display: none;">
+                <div class="form-col">
+                    <label>Length $L$ (mm)</label>
+                    <input type="number" id="L_input" value="2000" oninput="calculate()">
+                </div>
+                <div class="form-col">
+                    <label>Width $B$ (mm)</label>
+                    <input type="number" id="B_input" value="2000" oninput="calculate()">
+                </div>
+            </div>
             <div class="form-row">
                 <div class="form-col">
                     <label>Thickness $h$ (mm)</label>
                     <input type="number" id="h" value="800" oninput="calculate()">
                 </div>
-                <div class="form-col">
+                <div class="form-col" id="edgeCol">
                     <label>Edge Dist. (mm)</label>
                     <input type="number" id="edge" value="400" oninput="calculate()">
                 </div>
@@ -221,6 +236,13 @@
     </main>
 
     <script>
+        function toggleManualDim() {
+            const isManual = document.getElementById('manualDim').checked;
+            document.getElementById('manualDimRow').style.display = isManual ? 'flex' : 'none';
+            document.getElementById('edgeCol').style.display = isManual ? 'none' : 'block';
+            calculate();
+        }
+
         function calculate() {
             const fc = parseFloat(document.getElementById('fc').value) || 0;
             const fy = parseFloat(document.getElementById('fy').value) || 0;
@@ -234,6 +256,9 @@
             const edge = parseFloat(document.getElementById('edge').value) || 0;
             const barSize = parseInt(document.getElementById('barSize').value) || 0;
             const n_piles = parseInt(document.getElementById('nPiles').value);
+            const isManual = document.getElementById('manualDim').checked;
+            const L_manual = parseFloat(document.getElementById('L_input').value) || 0;
+            const B_manual = parseFloat(document.getElementById('B_input').value) || 0;
             const cover = 75;
 
             // Validation to prevent numerical instability
@@ -245,6 +270,7 @@
             }
 
             const n_piles_req = Math.ceil((PD + PL) / Qall);
+            const Qservice = (PD + PL) / n_piles;
             const Pu = 1.2 * PD + 1.6 * PL;
             const Qu = Pu / n_piles;
             const d = h - cover - barSize/2;
@@ -260,8 +286,16 @@
                 maxY = Math.max(maxY, p[1]);
             });
 
-            const L_cap = Math.max((maxX - minX) + 2 * edge, dpile + 2 * edge);
-            const B_cap = Math.max((maxY - minY) + 2 * edge, dpile + 2 * edge);
+            let L_cap, B_cap;
+            if (isManual) {
+                L_cap = L_manual;
+                B_cap = B_manual;
+            } else {
+                L_cap = Math.max((maxX - minX) + 2 * edge, dpile + 2 * edge);
+                B_cap = Math.max((maxY - minY) + 2 * edge, dpile + 2 * edge);
+                document.getElementById('L_input').value = Math.round(L_cap);
+                document.getElementById('B_input').value = Math.round(B_cap);
+            }
 
             // One-way shear at d from column face (check both directions)
             const crit_x = colSize/2 + d;
@@ -301,32 +335,53 @@
             const As_prov = n_bars * (Math.PI * barSize**2 / 4);
 
             // Status
-            let pass = (h >= 400) && (Vu1 <= phiVc1) && (Vu2 <= phiVc2) && (n_piles_req <= n_piles);
+            const pile_ok = Qservice <= Qall;
+            const shear1_ok = Vu1 <= phiVc1;
+            const shear2_ok = Vu2 <= phiVc2;
+            const depth_ok = h >= 400;
+            
+            // Check if piles fit in manual dimensions
+            const geom_ok = !isManual || (L_manual >= (maxX - minX + dpile) && B_manual >= (maxY - minY + dpile));
+
+            let pass = pile_ok && shear1_ok && shear2_ok && depth_ok && geom_ok;
             const badge = document.getElementById('statusBadge');
             badge.className = 'status-badge ' + (pass ? 'status-pass' : 'status-fail');
             badge.innerText = pass ? 'Design OK' : 'Check Design';
 
             document.getElementById('calcOutput').innerHTML = `
                 <div class="calc-step">
-                    <h3>1. Pile Requirements</h3>
-                    Piles Required: $n_{req} = \\lceil ${PD+PL} / ${Qall} \\rceil = ${n_piles_req}$ <br>
-                    Using ${n_piles}-pile cap pattern. <br>
+                    <h3>1. Pile Capacity Check (Service Loads)</h3>
+                    Total Service Load: $P = ${PD} + ${PL} = ${PD+PL} \\text{ kN}$ <br>
+                    Load per Pile: $Q_{serv} = ${PD+PL} / ${n_piles} = ${Qservice.toFixed(1)} \\text{ kN}$ <br>
+                    Allowable Capacity: $Q_{all} = ${Qall} \\text{ kN}$ <br>
+                    Status: <span class="${pile_ok ? 'check-pass' : 'check-fail'}">${pile_ok ? 'OK' : 'EXCEEDED'}</span>
+                </div>
+                ${!geom_ok ? `<div class="calc-step" style="border-left-color: var(--error);">
+                    <h3 style="color: var(--error);">Geometry Error</h3>
+                    Pile cap dimensions are too small to contain the piles.
+                </div>` : ''}
+                <div class="calc-step">
+                    <h3>2. Cap Design Loads (Factored)</h3>
+                    Factored Load: $P_u = 1.2(${PD}) + 1.6(${PL}) = ${Pu.toFixed(1)} \\text{ kN}$ <br>
                     Factored Load per Pile: $Q_u = ${Pu.toFixed(1)} / ${n_piles} = ${Qu.toFixed(1)} \\text{ kN}$
                 </div>
                 <div class="calc-step">
-                    <h3>2. Shear Checks</h3>
+                    <h3>3. Shear Checks</h3>
                     One-way Shear: $V_{u1} = ${Vu1.toFixed(1)} \\text{ kN}$ vs $\\phi V_c = ${phiVc1.toFixed(1)} \\text{ kN}$ <br>
                     Punching Shear: $V_{u2} = ${Vu2.toFixed(1)} \\text{ kN}$ vs $\\phi V_c = ${phiVc2.toFixed(1)} \\text{ kN}$
                 </div>
                 <div class="calc-step">
-                    <h3>3. Minimum Depth Check</h3>
+                    <h3>4. Minimum Depth Check</h3>
                     Provided $h = ${h} \\text{ mm}$. ACI 318 requires min 400mm for pile caps. <br>
                     Depth above bars: $h - cover = ${h-cover} \\text{ mm}$ (Min 300mm required).
                 </div>
             `;
 
             document.getElementById('reinfTableBody').innerHTML = `
-                <tr><td>Main Steel (Each Way)</td><td>${As_req.toFixed(0)} mm²</td><td>${n_bars} - ${barSize}mm</td><td class="${pass?'check-pass':'check-fail'}">${pass?'OK':'FAIL'}</td></tr>
+                <tr><td>Pile Capacity</td><td>$Q_{all} = ${Qall} \\text{ kN}$</td><td>$Q_{serv} = ${Qservice.toFixed(1)} \\text{ kN}$</td><td class="${pile_ok?'check-pass':'check-fail'}">${pile_ok?'OK':'FAIL'}</td></tr>
+                <tr><td>One-way Shear</td><td>$\\\\phi V_c = ${phiVc1.toFixed(1)} \\text{ kN}$</td><td>$V_{u1} = ${Vu1.toFixed(1)} \\text{ kN}$</td><td class="${shear1_ok?'check-pass':'check-fail'}">${shear1_ok?'OK':'FAIL'}</td></tr>
+                <tr><td>Punching Shear</td><td>$\\\\phi V_c = ${phiVc2.toFixed(1)} \\text{ kN}$</td><td>$V_{u2} = ${Vu2.toFixed(1)} \\text{ kN}$</td><td class="${shear2_ok?'check-pass':'check-fail'}">${shear2_ok?'OK':'FAIL'}</td></tr>
+                <tr><td>Main Steel (Each Way)</td><td>${As_req.toFixed(0)} mm²</td><td>${n_bars} - ${barSize}mm</td><td class="check-pass">OK</td></tr>
             `;
 
             drawPlan(L_cap, B_cap, colSize, dpile, spacing, positions, n_bars);

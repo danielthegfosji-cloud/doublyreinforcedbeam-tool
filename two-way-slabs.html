@@ -392,9 +392,8 @@
                     if (type === 'int_neg') return 75 + 30 * alpha * (1 - ratio);
                     if (type === 'pos') return 60 + 30 * alpha * (1.5 - ratio);
                     if (type === 'ext_neg') {
-                        // Table 13.6.4.2
                         if (beta === 0) return 100;
-                        let val = 75 + 15 * alpha * (1 - ratio); // Simplified interpolation for beta >= 2.5
+                        let val = 75 + 15 * alpha * (1 - ratio); 
                         if (beta < 2.5) val = 100 - (beta / 2.5) * (100 - val);
                         return Math.min(100, Math.max(45, val));
                     }
@@ -415,17 +414,33 @@
 
             detailedSteps += `
                 <div class="latex-row">
-                    $$ L_n = L_1 - \\text{Col} = ${l1} - ${col} = ${res1.ln} \\text{ mm} = ${ (res1.ln/1000).toFixed(2) } \\text{ m} $$
-                    $$ M_o = \\frac{w_u L_2 L_n^2}{8} = \\frac{${w_u.toFixed(2)} \\times ${(l2/1000).toFixed(2)} \\times ${(res1.ln/1000).toFixed(2)}^2}{8} = \\mathbf{${res1.Mo.toFixed(1)} \\text{ kNm}} $$
+                    $$ L_{n1} = L_1 - \\text{Col} = ${l1} - ${col} = ${res1.ln} \\text{ mm} = ${ (res1.ln/1000).toFixed(2) } \\text{ m} $$
+                    $$ M_{o1} = \\frac{w_u L_2 L_{n1}^2}{8} = \\frac{${w_u.toFixed(2)} \\times ${(l2/1000).toFixed(2)} \\times ${(res1.ln/1000).toFixed(2)}^2}{8} = \\mathbf{${res1.Mo.toFixed(1)} \\text{ kNm}} $$
+                    $$ L_{n2} = L_2 - \\text{Col} = ${l2} - ${col} = ${res2.ln} \\text{ mm} = ${ (res2.ln/1000).toFixed(2) } \\text{ m} $$
+                    $$ M_{o2} = \\frac{w_u L_1 L_{n2}^2}{8} = \\frac{${w_u.toFixed(2)} \\times ${(l1/1000).toFixed(2)} \\times ${(res2.ln/1000).toFixed(2)}^2}{8} = \\mathbf{${res2.Mo.toFixed(1)} \\text{ kNm}} $$
                 </div>
-                <p>Moment Distribution (Interior Panel):</p>
-                <ul class="result-list">
-                    <li>Total Negative Moment ($M_{neg}$): $ 0.65 \\times M_o = 0.65 \\times ${res1.Mo.toFixed(1)} = ${res1.M_int_neg.toFixed(1)} \\text{ kNm} $</li>
-                    <li>Total Positive Moment ($M_{pos}$): $ 0.35 \\times M_o = 0.35 \\times ${res1.Mo.toFixed(1)} = ${res1.M_pos.toFixed(1)} \\text{ kNm} $</li>
-                </ul>
+                <h4>Step 4: Moment Distribution to Strips</h4>
+                <p>For an interior panel, $M_o$ is distributed into total negative (65%) and positive (35%) moments, then further distributed to Column Strips (CS) and Middle Strips (MS) based on ACI 318-11 Table 13.6.4.1.</p>
+                
+                <table style="width:100%; border-collapse:collapse; font-size:0.85rem; margin-bottom: 1rem;">
+                    <tr style="background:#f1f5f9; border-bottom:2px solid #cbd5e1;">
+                        <th style="padding:8px; text-align:left;">Strip</th>
+                        <th style="padding:8px; text-align:center;">Factor</th>
+                        <th style="padding:8px; text-align:right;">Moment (kNm)</th>
+                    </tr>
+                    <tr><td style="padding:6px;">L1 CS Neg</td><td style="padding:6px; text-align:center;">$0.65 \times ${res1.pct_int_neg.toFixed(2)}$</td><td style="padding:6px; text-align:right;">${(res1.M_int_neg * res1.pct_int_neg).toFixed(1)}</td></tr>
+                    <tr><td style="padding:6px;">L1 MS Neg</td><td style="padding:6px; text-align:center;">$0.65 \times ${(1-res1.pct_int_neg).toFixed(2)}$</td><td style="padding:6px; text-align:right;">${(res1.M_int_neg * (1-res1.pct_int_neg)).toFixed(1)}</td></tr>
+                    <tr><td style="padding:6px;">L1 CS Pos</td><td style="padding:6px; text-align:center;">$0.35 \times ${res1.pct_pos.toFixed(2)}$</td><td style="padding:6px; text-align:right;">${(res1.M_pos * res1.pct_pos).toFixed(1)}</td></tr>
+                    <tr><td style="padding:6px;">L1 MS Pos</td><td style="padding:6px; text-align:center;">$0.35 \times ${(1-res1.pct_pos).toFixed(2)}$</td><td style="padding:6px; text-align:right;">${(res1.M_pos * (1-res1.pct_pos)).toFixed(1)}</td></tr>
+                </table>
+
+                <div class="latex-row">
+                    $$ M_{neg,total} = 0.65 \\times M_o = 0.65 \\times ${res1.Mo.toFixed(1)} = ${res1.M_int_neg.toFixed(1)} \\text{ kNm} $$
+                    $$ M_{neg,cs} = M_{neg,total} \\times \\text{Factor}_{cs} = ${res1.M_int_neg.toFixed(1)} \\times ${res1.pct_int_neg.toFixed(2)} = ${(res1.M_int_neg * res1.pct_int_neg).toFixed(1)} \\text{ kNm} $$
+                </div>
             `;
 
-            detailedSteps += "<h4>Step 4: Reinforcement Determination (Column Strip $L_1$)</h4>";
+            detailedSteps += "<h4>Step 5: Reinforcement Determination</h4>";
 
             // 5. Reinforcement Calculation
             function getSpacing(M, b_strip, d_eff) {
@@ -458,12 +473,13 @@
             const As_cs_min = 0.0018 * (l2/2) * h;
 
             detailedSteps += `
+                <p>Example for Direction $L_1$ Column Strip (Negative Moment):</p>
                 <div class="latex-row">
-                    $$ \\text{CS Negative Moment} = M_{neg} \\times \\text{pct}_{cs} = ${res1.M_int_neg.toFixed(1)} \\times ${res1.pct_int_neg.toFixed(2)} = ${M_cs_neg.toFixed(1)} \\text{ kNm} $$
-                    $$ A_{s,req} = \\frac{M \\times 10^6}{\\phi f_y (0.9d)} = \\frac{${M_cs_neg.toFixed(1)} \\times 10^6}{0.9 \\times ${fy} \\times (0.9 \\times ${d.toFixed(1)})} = ${As_cs_neg.toFixed(0)} \\text{ mm}^2 $$
+                    $$ A_{s,req} = \\frac{M_{u} \\times 10^6}{\\phi f_y (d - a/2)} \\approx \\frac{${M_cs_neg.toFixed(1)} \\times 10^6}{0.9 \\times ${fy} \\times 0.9(${d.toFixed(1)})} = ${As_cs_neg.toFixed(0)} \\text{ mm}^2 $$
                     $$ A_{s,min} = 0.0018 \\times b \\times h = 0.0018 \\times ${(l2/2).toFixed(0)} \\times ${h} = ${As_cs_min.toFixed(0)} \\text{ mm}^2 $$
                     $$ s_{calc} = \\frac{b \\times a_{bar}}{A_{s,design}} = \\frac{${(l2/2).toFixed(0)} \\times ${(Math.PI * db**2 / 4).toFixed(1)}}{${Math.max(As_cs_neg, As_cs_min).toFixed(0)}} = ${d1_reinf.cs_int_neg} \\text{ mm c/c} $$
                 </div>
+                <p>Spacings are calculated for all strips using the same logic above, considering their respective strip widths ($b$) and moments ($M_u$).</p>
             `;
 
             // 6. Punching Shear Safety Check
@@ -480,7 +496,7 @@
             const Vc3 = 0.083 * (2 + 40 * d / bo) * Math.sqrt(fc); // Alpha_s = 40 for interior
             const phiVc_punch = 0.75 * Math.min(Vc1, Vc2, Vc3) * bo * d / 1000;
 
-            detailedSteps += "<h4>Step 5: Punching Shear Check</h4>";
+            detailedSteps += "<h4>Step 6: Punching Shear Check</h4>";
             detailedSteps += `
                 <div class="latex-row">
                     $$ b_o = 4 \\times (\\text{col} + d) = 4 \\times (${col} + ${d.toFixed(1)}) = ${bo.toFixed(1)} \\text{ mm} $$
@@ -562,7 +578,8 @@
                 showL2: document.getElementById('showL2').checked
             };
 
-            lastDesignData = { l1, l2, col, h, fc, fy, db, cover, type: spanType, d1_reinf, d2_reinf, filters };
+            lastDesignData = { l1, l2, col, h, fc, fy, db, cover, type: spanType, d1_reinf, d2_reinf, filters, detailedSteps };
+
 
             if (window.MathJax && MathJax.typesetPromise) {
                 MathJax.typesetPromise();
@@ -936,6 +953,9 @@
             document.getElementById('testTitle').innerText = title;
             document.getElementById('testBody').innerHTML = body;
             document.getElementById('testModal').style.display = 'flex';
+            if (window.MathJax && MathJax.typesetPromise) {
+                MathJax.typesetPromise();
+            }
         }
 
         function closeTestModal() {
@@ -974,11 +994,9 @@
             setTimeout(() => {
                 const resultsText = document.getElementById('output').innerText;
                 
-                // My tool doesn't explicitly display Mo in the final schedule, 
-                // but we can check the Int. Negative Column Strip Moment
-                // Mu_long_neg_col = 88.4 ft-k = 119.8 kNm
+                // Use a more robust regex that ignores potential MathJax formatting in the header
+                let mu_match = resultsText.match(/Int\.\s*Negative\s*Column\s*Strip[\s\S]*?([\d\.]+)\s*kNm/i);
                 
-                const mu_match = resultsText.match(/Direction\s*L_1\s*\(Analysis Span\)\s*Int\.\s*Negative\s*Column\s*Strip\s*([\d\.]+)\s*kNm/i);
                 const mu_val = mu_match ? parseFloat(mu_match[1]) : 0;
                 const expected_mu = 119.8;
                 const error = Math.abs(mu_val - expected_mu) / expected_mu;
@@ -988,7 +1006,7 @@
                 } else {
                     openTestModal("❌ Test Result", `<strong>Example 16.3 (Interior Flat Plate)</strong><br><br>Calculated $M_{u,neg}$: ${mu_val.toFixed(1)} kNm (Exp: 119.8)<br><br>Note: Minor deviations may occur due to DDM clear span definitions and SI rounding.`);
                 }
-            }, 200);
+            }, 500);
         }
 
         // --- DETAILED COMPUTATIONS MODAL LOGIC ---
