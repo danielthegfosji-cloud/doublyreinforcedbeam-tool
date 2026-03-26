@@ -578,13 +578,10 @@
 
         function hideModal() {
             document.getElementById('welcomeModal').style.display = 'none';
-            localStorage.setItem('modalShown', 'true');
         }
 
         window.onload = function() {
-            if (!localStorage.getItem('modalShown')) {
-                document.getElementById('welcomeModal').style.display = 'flex';
-            }
+            document.getElementById('welcomeModal').style.display = 'flex';
         };
     </script>
 </body>
